@@ -5,6 +5,12 @@ import { getOpenRouter, SONAR_SEARCH_MODEL } from "../lib/openrouter";
 
 const router: IRouter = Router();
 
+// A node with this id triggers a web research step: when the conversation
+// advances INTO it, the server uses Perplexity Sonar to look up preliminary
+// public info about the company (from the onboarding transcript) and prepends
+// that summary to the node's reply. Flow advancement is unchanged otherwise.
+const RESEARCH_NODE_ID = "companyResearch";
+
 interface Branch {
   id: string;
   label: string;
@@ -130,9 +136,18 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       reply?: string;
     };
 
-    const matched = result.matchedBranchId
+    let matched = result.matchedBranchId
       ? currentNode.branches.find((b) => b.id === result.matchedBranchId)
       : undefined;
+
+    // Single-branch (open-ended) nodes advance on any genuine answer, even when
+    // the classifier is unsure — unless the user actually asked an off-topic
+    // question (handled below). Keeps linear data-collection from stalling.
+    let forcedAdvance = false;
+    if (!matched && currentNode.branches.length === 1 && result.offTopicQuestion !== true) {
+      matched = currentNode.branches[0];
+      forcedAdvance = true;
+    }
 
     if (!matched) {
       const reAsk = result.reply ?? currentNode.question;
@@ -192,9 +207,45 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       return;
     }
 
+    // Entering the research node: look up preliminary company info on the web
+    // (Perplexity Sonar) using everything collected so far, then continue.
+    let reply = forcedAdvance ? target.question : (result.reply ?? target.question);
+    if (target.id === RESEARCH_NODE_ID) {
+      const openrouter = getOpenRouter();
+      if (openrouter) {
+        try {
+          const research = await openrouter.chat.completions.create(
+            {
+              model: SONAR_SEARCH_MODEL,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "During an onboarding chat the user gave their business name, tax id (CNPJ), website, Instagram and sector. Using the conversation below, search the web for preliminary public info about this company (what it does, main products/services, online presence, size). Reply in the SAME language as the conversation, briefly (2-4 sentences), starting with a short lead-in equivalent to 'I took a quick look at your company:'. Do not invent data — if you can't find it, say you'll dig deeper later. Do not include links or citation markers.",
+                },
+                {
+                  role: "user",
+                  content: `Conversa de onboarding até aqui:\n${transcript}\nUsuário: ${lastUser.content}`,
+                },
+              ],
+            },
+            { timeout: 25000 },
+          );
+          const summary = research.choices[0]?.message?.content?.trim();
+          if (summary) reply = `${summary}\n\n${target.question}`;
+        } catch (researchErr) {
+          const e = researchErr as { message?: string; status?: number; code?: string };
+          req.log.error(
+            { message: e?.message, status: e?.status, code: e?.code },
+            "Company research failed; continuing without summary",
+          );
+        }
+      }
+    }
+
     res.json(
       SendChatResponse.parse({
-        reply: result.reply ?? target.question,
+        reply,
         currentNodeId: target.id,
         matchedBranchId: matched.id,
         done: target.branches.length === 0,

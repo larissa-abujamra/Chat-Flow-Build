@@ -16,3 +16,11 @@ The chat preview answers off-topic/factual questions with a real web search inst
 - Client is just the `openai` SDK pointed at `https://openrouter.ai/api/v1`.
 - The exact model id is `perplexity/sonar-pro-search` (verified via the OpenRouter models list; there is also a plain `perplexity/sonar-pro`). Do not guess Perplexity model ids — list them with the OpenRouter models curl.
 - Sonar failures are caught and degrade gracefully to just the re-ask.
+
+## Company research node (onboarding lead-in)
+
+A second Sonar use: a node with the reserved id `companyResearch` (`RESEARCH_NODE_ID` in chat.ts). When the chat advances INTO it, the server calls Sonar with the onboarding transcript to fetch preliminary public company info and prepends that summary to the node's reply, then continues.
+
+**Why an id-based convention (not a schema/`research` field):** the flow is stored as JSONB and edited via a UI that maps nodes explicitly; an id convention needs no openapi/codegen/DB change and survives UI edits because node ids are preserved on save. Adding a node field would require openapi spec + codegen + risk being dropped by the editor.
+
+**Open-ended questions in a branch-based engine:** the onboarding data-collection questions (name/CNPJ/site/Instagram/sector) are modeled as normal nodes with ONE permissive branch ("user provided X") whose targetNodeId is the next question — gpt-5-mini matches almost any free-text answer to that single branch and advances linearly.
