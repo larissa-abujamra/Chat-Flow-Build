@@ -25,6 +25,10 @@ interface Node {
 router.post("/chat", async (req, res) => {
   const parsed = SendChatBody.safeParse(req.body);
   if (!parsed.success) {
+    req.log.warn(
+      { issues: parsed.error.issues.map((i) => ({ path: i.path, code: i.code, message: i.message })) },
+      "Rejected chat input (400)",
+    );
     res.status(400).json({ error: "Invalid chat input", details: parsed.error.issues });
     return;
   }

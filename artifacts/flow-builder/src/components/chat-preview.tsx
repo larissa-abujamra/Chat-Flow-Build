@@ -85,22 +85,26 @@ export default function ChatPreview({
     }
 
     setRevealing(true);
-    let i = 1;
-    const step = () => {
+    // Reveal the remaining bubbles one at a time. The index is passed as an
+    // argument (not a mutable closure var) and the content is captured into a
+    // const, so the deferred setMessages updater can't read a stale/advanced
+    // index and push `undefined` content.
+    const revealFrom = (idx: number) => {
       if (session !== sessionRef.current) {
         setRevealing(false);
         return;
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: parts[i] }]);
-      i += 1;
-      if (i < parts.length) {
-        revealTimerRef.current = setTimeout(step, typingDelayFor(parts[i]));
+      const content = parts[idx];
+      setMessages((prev) => [...prev, { role: "assistant", content }]);
+      const next = idx + 1;
+      if (next < parts.length) {
+        revealTimerRef.current = setTimeout(() => revealFrom(next), typingDelayFor(parts[next]));
       } else {
         setRevealing(false);
         finalize();
       }
     };
-    revealTimerRef.current = setTimeout(step, typingDelayFor(parts[1]));
+    revealTimerRef.current = setTimeout(() => revealFrom(1), typingDelayFor(parts[1]));
   };
 
   const startTimer = () => {

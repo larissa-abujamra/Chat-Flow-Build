@@ -1,5 +1,1 @@
-- [Replit managed AI gpt-5](replit-managed-ai-gpt5.md) — gpt-5 chat calls reject `temperature` and use `max_completion_tokens`, not `max_tokens`.
-- [api-client-react imports](api-client-react-imports.md) — import generated hooks/types from the barrel, never the deep generated path (breaks type resolution).
-- [React Flow controlled graph](react-flow-controlled-graph.md) — use useNodesState + reconcile from app state (never rebuild node objects each render, breaks dragging); mirror node-delete reference cleanup in every editor view.
-- [OpenRouter Sonar search](openrouter-sonar-search.md) — chat off-script answers use perplexity/sonar-pro-search (user-owned OPENROUTER_API_KEY); branch classification stays on gpt-5-mini, Sonar only on off-topic no-match.
-- [Codegen → server restart](codegen-server-restart.md) — after api-spec codegen adds a field, restart api-server or Zod silently strips it on PUT/GET; verify with a real round-trip, not just typecheck.
+- [Deferred setState closures](deferred-setstate-closures.md) — React functional updaters must capture values into a const, never read a mutable index you advance after the setState call.
