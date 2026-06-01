@@ -111,6 +111,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowBranch"
+        position:
+          type: object
+          required: [x, y]
+          properties:
+            x:
+              type: number
+            y:
+              type: number
     Flow:
       type: object
       required: [id, name, startNodeId, nodes, updatedAt]

@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FlowBranch } from './flowBranch';
+import type { FlowNodePosition } from './flowNodePosition';
 
 export interface FlowNode {
   id: string;
   question: string;
   branches: FlowBranch[];
+  position?: FlowNodePosition;
 }

@@ -12,6 +12,7 @@ export interface FlowNodeData {
   id: string;
   question: string;
   branches: FlowBranchData[];
+  position?: { x: number; y: number };
 }
 
 export const flowsTable = pgTable("flows", {

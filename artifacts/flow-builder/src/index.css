@@ -68,50 +68,50 @@
 }
 
 :root {
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --border: 222 47% 20%;
-  --input: 222 47% 20%;
-  --ring: 38 92% 50%;
+  --background: 320 30% 99%;
+  --foreground: 222 47% 14%;
+  --border: 220 16% 90%;
+  --input: 220 16% 90%;
+  --ring: 330 81% 60%;
 
-  --card: 222 47% 15%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 222 47% 20%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 14%;
+  --card-border: 220 16% 90%;
 
-  --popover: 222 47% 15%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 222 47% 20%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 14%;
+  --popover-border: 220 16% 90%;
 
-  --primary: 38 92% 50%;
-  --primary-foreground: 26 83% 14%;
-  --secondary: 222 47% 20%;
-  --secondary-foreground: 210 40% 98%;
+  --primary: 330 81% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 95% 94%;
+  --secondary-foreground: 217 65% 38%;
 
-  --muted: 222 47% 20%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: 220 16% 96%;
+  --muted-foreground: 220 9% 46%;
 
-  --accent: 222 47% 25%;
-  --accent-foreground: 210 40% 98%;
+  --accent: 145 63% 93%;
+  --accent-foreground: 145 63% 26%;
 
   --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive-foreground: 0 0% 100%;
 
-  --chart-1: 38 92% 50%;
-  --chart-2: 173 58% 39%;
-  --chart-3: 312 80% 55%;
-  --chart-4: 210 100% 65%;
-  --chart-5: 142 71% 45%;
+  --chart-1: 330 81% 60%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 145 63% 42%;
+  --chart-4: 38 92% 55%;
+  --chart-5: 280 65% 62%;
 
   --radius: 0.75rem;
 
-  --sidebar: 222 47% 13%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 222 47% 20%;
-  --sidebar-primary: 38 92% 50%;
-  --sidebar-primary-foreground: 26 83% 14%;
-  --sidebar-accent: 222 47% 20%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 38 92% 50%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 222 47% 14%;
+  --sidebar-border: 220 16% 90%;
+  --sidebar-primary: 330 81% 60%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 16% 96%;
+  --sidebar-accent-foreground: 222 47% 14%;
+  --sidebar-ring: 330 81% 60%;
 }
 
 .dark {

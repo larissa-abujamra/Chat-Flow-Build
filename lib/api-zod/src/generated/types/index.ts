@@ -14,4 +14,5 @@ export * from './flow';
 export * from './flowBranch';
 export * from './flowInput';
 export * from './flowNode';
+export * from './flowNodePosition';
 export * from './healthStatus';

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FlowInput, FlowNode, FlowBranch, useUpdateFlow, getGetFlowQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -6,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Save, Flag, Zap, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Save, Flag, Zap, CheckCircle2, List, Workflow } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import FlowChart from "@/components/flow-chart";
 
 export default function FlowEditor({ 
   flow, 
@@ -23,6 +25,7 @@ export default function FlowEditor({
   const updateFlow = useUpdateFlow();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [view, setView] = useState<"list" | "chart">("list");
 
   const addNode = () => {
     const newNode: FlowNode = {
@@ -41,7 +44,14 @@ export default function FlowEditor({
   const removeNode = (id: string) => {
     onChange({
       ...flow,
-      nodes: flow.nodes.filter(n => n.id !== id),
+      nodes: flow.nodes
+        .filter(n => n.id !== id)
+        .map(n => ({
+          ...n,
+          branches: n.branches.map(b =>
+            b.targetNodeId === id ? { ...b, targetNodeId: null } : b
+          ),
+        })),
       startNodeId: flow.startNodeId === id ? null : flow.startNodeId
     });
   };
@@ -108,11 +118,34 @@ export default function FlowEditor({
             placeholder="Flow Name"
           />
         </div>
-        <Button onClick={handleSave} disabled={updateFlow.isPending} className="gap-2 shrink-0">
-          <Save className="w-4 h-4" /> Save Flow
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center rounded-lg border border-border bg-muted p-0.5">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${view === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <List className="w-4 h-4" /> List
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("chart")}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${view === "chart" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Workflow className="w-4 h-4" /> Flow Chart
+            </button>
+          </div>
+          <Button onClick={handleSave} disabled={updateFlow.isPending} className="gap-2">
+            <Save className="w-4 h-4" /> Save Flow
+          </Button>
+        </div>
       </div>
 
+      {view === "chart" ? (
+        <div className="flex-1 min-h-0 bg-background/50">
+          <FlowChart flow={flow} onChange={onChange} activeNodeId={activeNodeId} />
+        </div>
+      ) : (
       <div className="flex-1 overflow-auto bg-background/50 p-4 md:p-6">
         <div className="max-w-4xl mx-auto space-y-6 pb-20">
           
@@ -208,6 +241,7 @@ export default function FlowEditor({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

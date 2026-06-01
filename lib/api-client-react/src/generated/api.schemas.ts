@@ -16,10 +16,16 @@ export interface FlowBranch {
   targetNodeId: string | null;
 }
 
+export type FlowNodePosition = {
+  x: number;
+  y: number;
+};
+
 export interface FlowNode {
   id: string;
   question: string;
   branches: FlowBranch[];
+  position?: FlowNodePosition;
 }
 
 export interface Flow {

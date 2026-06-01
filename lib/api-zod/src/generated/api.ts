@@ -32,7 +32,11 @@ export const GetFlowResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "targetNodeId": zod.string().nullable()
-}))
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
 })),
   "updatedAt": zod.string()
 })
@@ -51,7 +55,11 @@ export const UpdateFlowBody = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "targetNodeId": zod.string().nullable()
-}))
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
 }))
 })
 
@@ -66,7 +74,11 @@ export const UpdateFlowResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "targetNodeId": zod.string().nullable()
-}))
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
 })),
   "updatedAt": zod.string()
 })
@@ -88,7 +100,11 @@ export const SendChatBody = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "targetNodeId": zod.string().nullable()
-}))
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
 }))
 }),
   "messages": zod.array(zod.object({

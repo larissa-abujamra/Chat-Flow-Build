@@ -38,8 +38,10 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
 ## Product
 
 - Author a tree of question nodes; each node has answer branches that point to a next node or end the conversation. One node is the Start.
+- Two editing views (toggle in the editor header): a **List** view (cards) and a **Flow Chart** view (draggable node graph, React Flow / `@xyflow/react`). In the chart, drag boxes to reposition (persisted via the optional `position` field on each node), drag from a node's bottom handle to another node to create a branch, and delete edges/nodes to remove branches/nodes.
 - Save the flow to persist it.
 - Live chat preview: type answers, a real LLM matches each answer to a branch and advances; non-matching answers re-ask; conversation ends at leaf/end nodes.
+- Light theme with pink (primary), blue, and green accents.
 
 ## User preferences
 
