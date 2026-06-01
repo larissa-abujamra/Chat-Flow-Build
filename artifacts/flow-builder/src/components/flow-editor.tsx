@@ -177,7 +177,7 @@ export default function FlowEditor({
               </div>
             ) : (
               <div className="space-y-4">
-                {flow.nodes.map(node => (
+                {flow.nodes.map((node, ni) => (
                   <Card
                     key={node.id}
                     className={`border-l-4 transition-all ${activeNodeId === node.id ? 'border-l-waz ring-2 ring-waz/25' : flow.startNodeId === node.id ? 'border-l-waz/40' : 'border-l-transparent'}`}
@@ -185,6 +185,9 @@ export default function FlowEditor({
                     <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                       <div className="flex-1 mr-4">
                         <span className="eyebrow flex items-center gap-1.5 mb-1">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                            {ni + 1}
+                          </span>
                           {activeNodeId === node.id && <span className="w-1.5 h-1.5 rounded-full bg-waz animate-pulse" />}
                           {activeNodeId === node.id ? "Active" : "Question / Message"}
                         </span>
@@ -217,8 +220,11 @@ export default function FlowEditor({
                     <CardContent className="space-y-4">
                       <div className="space-y-3">
                         <span className="eyebrow">Branches (User Answers)</span>
-                        {node.branches.map(branch => (
+                        {node.branches.map((branch, bi) => (
                           <div key={branch.id} className="flex items-center gap-3 bg-muted/50 p-2 rounded-lg">
+                            <span className="shrink-0 inline-flex items-center justify-center min-w-[34px] h-8 px-1.5 rounded-md bg-waz/15 text-waz text-xs font-bold">
+                              {ni + 1}{String.fromCharCode(65 + bi)}
+                            </span>
                             <Input
                               value={branch.label}
                               onChange={e => updateBranch(node.id, branch.id, { label: e.target.value })}

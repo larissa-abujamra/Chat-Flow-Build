@@ -24,6 +24,7 @@ type BranchTargetOption = { id: string; label: string };
 
 type QuestionNodeData = {
   label: string;
+  number: number;
   isStart: boolean;
   isActive: boolean;
   branches: FlowBranch[];
@@ -96,6 +97,9 @@ function QuestionNode({ id, data }: NodeProps<QNode>) {
       <div className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="eyebrow flex items-center gap-1.5">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+              {data.number}
+            </span>
             {data.isActive && <span className="w-1.5 h-1.5 rounded-full bg-waz animate-pulse" />}
             {data.isActive ? "Active" : "Question"}
           </span>
@@ -128,9 +132,12 @@ function QuestionNode({ id, data }: NodeProps<QNode>) {
           {data.branches.length === 0 && (
             <p className="text-[11px] text-muted-foreground italic">No answers yet.</p>
           )}
-          {data.branches.map((branch) => (
+          {data.branches.map((branch, bi) => (
             <div key={branch.id} className="space-y-1 rounded-md bg-muted/50 p-1.5">
               <div className="flex items-center gap-1.5">
+                <span className="shrink-0 inline-flex items-center justify-center min-w-[28px] h-6 px-1 rounded bg-waz/15 text-waz text-[10px] font-bold">
+                  {data.number}{String.fromCharCode(65 + bi)}
+                </span>
                 <input
                   value={branch.label}
                   onChange={(e) => data.onBranchLabelChange(id, branch.id, e.target.value)}
@@ -261,7 +268,7 @@ export default function FlowChart({
   useEffect(() => {
     setRfNodes((prev) => {
       const prevById = new Map(prev.map((n) => [n.id, n]));
-      return flow.nodes.map((n) => {
+      return flow.nodes.map((n, ni) => {
         const existing = prevById.get(n.id);
         const base = existing ?? ({} as Partial<QNode>);
         return {
@@ -271,6 +278,7 @@ export default function FlowChart({
           position: existing?.position ?? n.position ?? layout[n.id] ?? { x: 40, y: 40 },
           data: {
             label: n.question,
+            number: ni + 1,
             isStart: flow.startNodeId === n.id,
             isActive: activeNodeId === n.id,
             branches: n.branches,
