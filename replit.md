@@ -9,7 +9,7 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` — Postgres connection string; `OPENROUTER_API_KEY` — user-provided OpenRouter key, used only for Perplexity Sonar Pro Search in off-script chat answers
 
 ## Stack
 
@@ -32,7 +32,7 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
 
 - Single persistent flow row (id=`"default"`) upserted via `onConflictDoUpdate` — the app edits one global flow, not per-user documents.
 - Chat advancement is server-deterministic: the LLM only classifies a typed answer into one of the current node's branch IDs (returns `{matchedBranchId, reply}`); the server validates the ID against real branches and advances `currentNodeId`. Hallucinated/invalid IDs degrade to "no match" and stay on the current node.
-- Hybrid off-script handling: on "no match", the LLM answers an off-topic question/comment helpfully (in the conversation's language/tone, never inventing prices/dates/facts) and then re-asks the current question. Truly empty/unclear input just re-asks. The server still does not advance `currentNodeId` on a no-match.
+- Hybrid off-script handling: on "no match", the classifier also returns `offTopicQuestion`. If true (a factual/real-world question), the server makes a SECOND call to Perplexity Sonar Pro Search (`perplexity/sonar-pro-search` via OpenRouter) to answer it with live web info, then appends the re-ask of the current question. If false (small talk / unclear / empty), it just re-asks. The server still does not advance `currentNodeId` on a no-match. Branch classification/advancement stays on gpt-5-mini (no web search) — Sonar is only invoked for off-topic questions.
 - The chat preview sends the LIVE (possibly unsaved) flow from the editor, so users can test edits without saving first.
 - LLM uses Replit-managed AI (no user API key). Model `gpt-5-mini`, `max_completion_tokens` (not `max_tokens`), `response_format: json_object`, and NO `temperature` (gpt-5 models reject it).
 

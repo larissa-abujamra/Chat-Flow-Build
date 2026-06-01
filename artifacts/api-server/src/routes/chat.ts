@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { SendChatBody, SendChatResponse } from "@workspace/api-zod";
 import { openai } from "../lib/openai";
+import { getOpenRouter, SONAR_SEARCH_MODEL } from "../lib/openrouter";
 
 const router: IRouter = Router();
 
@@ -100,14 +101,13 @@ The possible answer branches are:
 ${branchDescriptions.join("\n")}
 
 Decide which branch the user's latest message best matches. Then write a short, natural assistant reply:
-- If a branch matches and it leads to a next question, briefly acknowledge the answer, then ask that next question (you may rephrase it naturally, keeping its meaning).
-- If a branch matches and it ends the conversation, give a brief, friendly closing message.
-- If no branch clearly matches, set matchedBranchId to null and handle it like a helpful assistant:
-  - If the user's message is an off-topic question, comment, or request (e.g. a general question, a doubt, small talk), ANSWER it helpfully and naturally first, staying in the same persona, language, and tone as the conversation so far. Then smoothly steer back by re-asking the current question.
-  - NEVER invent facts you do not have — especially prices, dates, availability, or policies. If you don't know, say you'll confirm and continue.
-  - If the message is just unclear or empty, simply re-ask the current question, clarifying the available options.
+- If a branch matches and it leads to a next question, briefly acknowledge the answer, then ask that next question (you may rephrase it naturally, keeping its meaning). Set offTopicQuestion to false.
+- If a branch matches and it ends the conversation, give a brief, friendly closing message. Set offTopicQuestion to false.
+- If no branch clearly matches, set matchedBranchId to null:
+  - If the user's latest message is an off-topic question or request that needs real-world / factual information to answer well (e.g. a general knowledge question, current prices, dates, availability, news, "what is X", "how do I Y"), set offTopicQuestion to true. In that case leave "reply" as just a natural re-ask of the current question (clarifying the available options) — a separate web-search step will supply the factual answer, so do NOT try to answer the question yourself.
+  - If the message is small talk, a simple comment, or just unclear/empty, set offTopicQuestion to false and simply re-ask the current question, clarifying the available options. NEVER invent facts.
 
-Always reply in the same language as the conversation. Respond ONLY as JSON: {"matchedBranchId": <branch id string or null>, "reply": <string>}.`;
+Always reply in the same language as the conversation. Respond ONLY as JSON: {"matchedBranchId": <branch id string or null>, "offTopicQuestion": <boolean>, "reply": <string>}.`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -126,6 +126,7 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
     const raw = completion.choices[0]?.message?.content ?? "{}";
     const result = JSON.parse(raw) as {
       matchedBranchId?: string | null;
+      offTopicQuestion?: boolean;
       reply?: string;
     };
 
@@ -134,9 +135,42 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       : undefined;
 
     if (!matched) {
+      const reAsk = result.reply ?? currentNode.question;
+      let reply = reAsk;
+
+      // Off-script question: answer it with a real web search (Perplexity Sonar Pro),
+      // then steer back by re-asking the current question. Flow does NOT advance.
+      const openrouter = getOpenRouter();
+      if (result.offTopicQuestion === true && openrouter) {
+        try {
+          const search = await openrouter.chat.completions.create(
+            {
+              model: SONAR_SEARCH_MODEL,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You answer the user's question helpfully and concisely using up-to-date web information. Reply in the SAME language as the user's message. Keep it to 1-3 sentences. Do not include citation markers, footnotes, or URLs.",
+                },
+                { role: "user", content: lastUser.content },
+              ],
+            },
+            { timeout: 15000 },
+          );
+          const answer = search.choices[0]?.message?.content?.trim();
+          if (answer) reply = `${answer}\n\n${reAsk}`;
+        } catch (searchErr) {
+          const e = searchErr as { message?: string; status?: number; code?: string };
+          req.log.error(
+            { message: e?.message, status: e?.status, code: e?.code },
+            "Sonar search failed; falling back to re-ask",
+          );
+        }
+      }
+
       res.json(
         SendChatResponse.parse({
-          reply: result.reply ?? currentNode.question,
+          reply,
           currentNodeId: currentNode.id,
           matchedBranchId: null,
           done: false,
