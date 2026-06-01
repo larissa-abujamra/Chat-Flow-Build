@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { FlowInput, ChatMessage, ChatResult } from "@workspace/api-client-react/src/generated/api.schemas";
-import { useSendChat } from "@workspace/api-client-react";
+import { FlowInput, ChatMessage, ChatResult, useSendChat } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,20 +16,24 @@ export default function ChatPreview({
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [isDone, setIsDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sessionRef = useRef(0);
   const sendChat = useSendChat();
 
-  const handleSend = async (overrideMessage?: string) => {
+  const handleSend = (overrideMessage?: string) => {
     const text = overrideMessage ?? inputValue;
     if (!text.trim() && messages.length > 0) return;
 
-    let newMessages = [...messages];
-    
+    const session = sessionRef.current;
+    const newMessages = [...messages];
+
     if (messages.length > 0) {
       newMessages.push({ role: "user", content: text });
       setMessages(newMessages);
       setInputValue("");
     }
+    setError(null);
 
     sendChat.mutate({
       data: {
@@ -40,36 +43,48 @@ export default function ChatPreview({
       }
     }, {
       onSuccess: (res: ChatResult) => {
+        if (session !== sessionRef.current) return;
         setMessages(prev => [...prev, { role: "assistant", content: res.reply }]);
         setCurrentNodeId(res.currentNodeId);
         setIsDone(res.done);
         onActiveNodeChange(res.currentNodeId);
+      },
+      onError: () => {
+        if (session !== sessionRef.current) return;
+        setError("Something went wrong generating a reply. Try again.");
       }
     });
   };
 
   const handleRestart = () => {
+    const session = sessionRef.current + 1;
+    sessionRef.current = session;
     setMessages([]);
     setCurrentNodeId(null);
     setIsDone(false);
+    setError(null);
+    setInputValue("");
     onActiveNodeChange(null);
-    // Auto start by sending empty msg array to get first question
-    setTimeout(() => {
-      sendChat.mutate({
-        data: {
-          flow,
-          messages: [],
-          currentNodeId: null
-        }
-      }, {
-        onSuccess: (res: ChatResult) => {
-          setMessages([{ role: "assistant", content: res.reply }]);
-          setCurrentNodeId(res.currentNodeId);
-          setIsDone(res.done);
-          onActiveNodeChange(res.currentNodeId);
-        }
-      });
-    }, 50);
+
+    sendChat.mutate({
+      data: {
+        flow,
+        messages: [],
+        currentNodeId: null
+      }
+    }, {
+      onSuccess: (res: ChatResult) => {
+        if (session !== sessionRef.current) return;
+        setMessages([{ role: "assistant", content: res.reply }]);
+        setCurrentNodeId(res.currentNodeId);
+        setIsDone(res.done);
+        onActiveNodeChange(res.currentNodeId);
+      },
+      onError: () => {
+        if (session !== sessionRef.current) return;
+        setError("Couldn't start the conversation. Try again.");
+      }
+    });
   };
 
   useEffect(() => {
@@ -85,7 +100,7 @@ export default function ChatPreview({
           <Bot className="w-5 h-5 text-primary" />
           Preview
         </h3>
-        <Button variant="ghost" size="sm" onClick={handleRestart} className="h-8 gap-2">
+        <Button variant="ghost" size="sm" onClick={handleRestart} disabled={sendChat.isPending} className="h-8 gap-2">
           <RotateCcw className="w-3.5 h-3.5" /> Restart
         </Button>
       </div>
@@ -130,6 +145,10 @@ export default function ChatPreview({
           </div>
         )}
         
+        {error && (
+          <div className="text-sm text-destructive text-center py-2">{error}</div>
+        )}
+
         {isDone && (
           <div className="flex flex-col items-center justify-center py-6 space-y-3 border-t border-border mt-4">
             <div className="text-sm text-muted-foreground">Conversation ended</div>

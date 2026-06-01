@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { useGetFlow, getGetFlowQueryKey } from "@workspace/api-client-react";
+import { useGetFlow, getGetFlowQueryKey, FlowInput } from "@workspace/api-client-react";
 import FlowEditor from "@/components/flow-editor";
 import ChatPreview from "@/components/chat-preview";
-import { FlowInput } from "@workspace/api-client-react/src/generated/api.schemas";
 import { Loader2 } from "lucide-react";
 
 export default function Home() {

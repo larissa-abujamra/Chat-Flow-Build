@@ -108,8 +108,8 @@ Respond ONLY as JSON: {"matchedBranchId": <branch id string or null>, "reply": <
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.3,
+      model: "gpt-5-mini",
+      max_completion_tokens: 8192,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },

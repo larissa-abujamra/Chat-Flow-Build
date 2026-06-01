@@ -1,6 +1,6 @@
-# [Project name]
+# Flow Builder
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An editable conversation-flow wireframe: author a tree of question nodes (each answer branches to the next question) and test it live in a chat preview where a real LLM decides which branch each typed answer matches.
 
 ## Run & Operate
 
@@ -22,15 +22,24 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- DB schema (source of truth): `lib/db/src/schema/flows.ts` — single `flows` table, one persistent row id=`"default"`.
+- API contract (source of truth): `lib/api-spec` OpenAPI spec → `pnpm --filter @workspace/api-spec run codegen` generates React Query hooks + Zod schemas into `@workspace/api-client-react`.
+- Backend routes: `artifacts/api-server/src/routes/flow.ts` (GET/PUT `/flow`), `artifacts/api-server/src/routes/chat.ts` (POST `/chat`).
+- LLM client: `artifacts/api-server/src/lib/openai.ts` (Replit-managed AI).
+- Frontend: `artifacts/flow-builder/src/pages/home.tsx`, `components/flow-editor.tsx`, `components/chat-preview.tsx`.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Single persistent flow row (id=`"default"`) upserted via `onConflictDoUpdate` — the app edits one global flow, not per-user documents.
+- Chat advancement is server-deterministic: the LLM only classifies a typed answer into one of the current node's branch IDs (returns `{matchedBranchId, reply}`); the server validates the ID against real branches and advances `currentNodeId`. Hallucinated/invalid IDs degrade to "no match" and re-ask.
+- The chat preview sends the LIVE (possibly unsaved) flow from the editor, so users can test edits without saving first.
+- LLM uses Replit-managed AI (no user API key). Model `gpt-5-mini`, `max_completion_tokens` (not `max_tokens`), `response_format: json_object`, and NO `temperature` (gpt-5 models reject it).
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Author a tree of question nodes; each node has answer branches that point to a next node or end the conversation. One node is the Start.
+- Save the flow to persist it.
+- Live chat preview: type answers, a real LLM matches each answer to a branch and advances; non-matching answers re-ask; conversation ends at leaf/end nodes.
 
 ## User preferences
 
@@ -38,7 +47,9 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Import generated types/hooks from the `@workspace/api-client-react` barrel, NOT the deep `@workspace/api-client-react/src/generated/api.schemas` path — the deep path breaks type resolution and cascades implicit-any errors.
+- gpt-5 models reject `temperature` and use `max_completion_tokens`; do not add `temperature` to the chat completion call.
+- Verify the frontend with `pnpm --filter @workspace/flow-builder run typecheck`, not `build` (build needs workflow-provided env vars).
 
 ## Pointers
 

@@ -1,5 +1,4 @@
-import { FlowInput, FlowNode, FlowBranch } from "@workspace/api-client-react/src/generated/api.schemas";
-import { useUpdateFlow, getGetFlowQueryKey } from "@workspace/api-client-react";
+import { FlowInput, FlowNode, FlowBranch, useUpdateFlow, getGetFlowQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
