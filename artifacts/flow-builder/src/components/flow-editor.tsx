@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Save, Flag, Zap, CheckCircle2, List, Workflow } from "lucide-react";
+import { Plus, Trash2, Save, Flag, CheckCircle2, List, Workflow, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FlowChart from "@/components/flow-chart";
 
@@ -102,11 +102,24 @@ export default function FlowEditor({
     });
   };
 
+  const handleExport = () => {
+    const json = JSON.stringify(flow, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const slug = (flow.name || "flow").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "flow";
+    a.href = url;
+    a.download = `${slug}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="p-4 md:p-6 border-b border-border bg-card flex items-center justify-between z-10 shrink-0">
         <div className="flex items-center gap-4 flex-1">
-          <Zap className="text-primary w-6 h-6" />
           <Input
             value={flow.name}
             onChange={e => onChange({ ...flow, name: e.target.value })}
@@ -131,6 +144,9 @@ export default function FlowEditor({
               <Workflow className="w-4 h-4" /> Flow Chart
             </button>
           </div>
+          <Button variant="outline" onClick={handleExport} className="gap-2">
+            <Download className="w-4 h-4" /> Export Flow
+          </Button>
           <Button onClick={handleSave} disabled={updateFlow.isPending} className="gap-2">
             <Save className="w-4 h-4" /> Save Flow
           </Button>
