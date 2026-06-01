@@ -31,7 +31,8 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
 ## Architecture decisions
 
 - Single persistent flow row (id=`"default"`) upserted via `onConflictDoUpdate` — the app edits one global flow, not per-user documents.
-- Chat advancement is server-deterministic: the LLM only classifies a typed answer into one of the current node's branch IDs (returns `{matchedBranchId, reply}`); the server validates the ID against real branches and advances `currentNodeId`. Hallucinated/invalid IDs degrade to "no match" and re-ask.
+- Chat advancement is server-deterministic: the LLM only classifies a typed answer into one of the current node's branch IDs (returns `{matchedBranchId, reply}`); the server validates the ID against real branches and advances `currentNodeId`. Hallucinated/invalid IDs degrade to "no match" and stay on the current node.
+- Hybrid off-script handling: on "no match", the LLM answers an off-topic question/comment helpfully (in the conversation's language/tone, never inventing prices/dates/facts) and then re-asks the current question. Truly empty/unclear input just re-asks. The server still does not advance `currentNodeId` on a no-match.
 - The chat preview sends the LIVE (possibly unsaved) flow from the editor, so users can test edits without saving first.
 - LLM uses Replit-managed AI (no user API key). Model `gpt-5-mini`, `max_completion_tokens` (not `max_tokens`), `response_format: json_object`, and NO `temperature` (gpt-5 models reject it).
 

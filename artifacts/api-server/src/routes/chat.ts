@@ -102,9 +102,12 @@ ${branchDescriptions.join("\n")}
 Decide which branch the user's latest message best matches. Then write a short, natural assistant reply:
 - If a branch matches and it leads to a next question, briefly acknowledge the answer, then ask that next question (you may rephrase it naturally, keeping its meaning).
 - If a branch matches and it ends the conversation, give a brief, friendly closing message.
-- If no branch clearly matches, do not pick one — politely re-ask the current question, optionally clarifying the available options.
+- If no branch clearly matches, set matchedBranchId to null and handle it like a helpful assistant:
+  - If the user's message is an off-topic question, comment, or request (e.g. a general question, a doubt, small talk), ANSWER it helpfully and naturally first, staying in the same persona, language, and tone as the conversation so far. Then smoothly steer back by re-asking the current question.
+  - NEVER invent facts you do not have — especially prices, dates, availability, or policies. If you don't know, say you'll confirm and continue.
+  - If the message is just unclear or empty, simply re-ask the current question, clarifying the available options.
 
-Respond ONLY as JSON: {"matchedBranchId": <branch id string or null>, "reply": <string>}.`;
+Always reply in the same language as the conversation. Respond ONLY as JSON: {"matchedBranchId": <branch id string or null>, "reply": <string>}.`;
 
   try {
     const completion = await openai.chat.completions.create({
