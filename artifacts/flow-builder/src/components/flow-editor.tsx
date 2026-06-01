@@ -3,7 +3,6 @@ import { FlowInput, FlowNode, FlowBranch, useUpdateFlow, getGetFlowQueryKey } fr
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Save, Flag, Zap, CheckCircle2, List, Workflow } from "lucide-react";
@@ -116,18 +115,18 @@ export default function FlowEditor({
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center rounded-lg border border-border bg-muted p-0.5">
+          <div className="flex items-center rounded-full border border-border bg-muted p-0.5">
             <button
               type="button"
               onClick={() => setView("list")}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${view === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${view === "list" ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
               <List className="w-4 h-4" /> List
             </button>
             <button
               type="button"
               onClick={() => setView("chart")}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${view === "chart" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${view === "chart" ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Workflow className="w-4 h-4" /> Flow Chart
             </button>
@@ -146,7 +145,10 @@ export default function FlowEditor({
         <div className="flex-1 overflow-auto bg-background/50 p-4 md:p-6">
           <div className="max-w-4xl mx-auto space-y-6 pb-20">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold tracking-tight">Nodes</h2>
+              <div>
+                <span className="eyebrow">Editor</span>
+                <h2 className="text-xl font-bold tracking-tight">Nodes</h2>
+              </div>
               <Button onClick={addNode} variant="secondary" className="gap-2">
                 <Plus className="w-4 h-4" /> Add Node
               </Button>
@@ -162,11 +164,14 @@ export default function FlowEditor({
                 {flow.nodes.map(node => (
                   <Card
                     key={node.id}
-                    className={`border-l-4 transition-colors ${activeNodeId === node.id ? 'border-l-primary ring-1 ring-primary/50' : 'border-l-transparent'} ${flow.startNodeId === node.id ? 'border-l-green-500' : ''}`}
+                    className={`border-l-4 transition-all ${activeNodeId === node.id ? 'border-l-waz ring-2 ring-waz/25' : flow.startNodeId === node.id ? 'border-l-waz/40' : 'border-l-transparent'}`}
                   >
                     <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                       <div className="flex-1 mr-4">
-                        <Label className="text-xs text-muted-foreground mb-1 block">Question / Message</Label>
+                        <span className="eyebrow flex items-center gap-1.5 mb-1">
+                          {activeNodeId === node.id && <span className="w-1.5 h-1.5 rounded-full bg-waz animate-pulse" />}
+                          {activeNodeId === node.id ? "Active" : "Question / Message"}
+                        </span>
                         <Input
                           value={node.question}
                           onChange={e => updateNode(node.id, { question: e.target.value })}
@@ -184,7 +189,7 @@ export default function FlowEditor({
                             <Flag className="w-4 h-4 text-muted-foreground" />
                           </Button>
                         ) : (
-                          <div className="flex items-center gap-1 text-green-500 text-xs font-bold px-2 py-1 bg-green-500/10 rounded-md">
+                          <div className="flex items-center gap-1 text-waz text-xs font-bold px-2 py-1 bg-waz/10 rounded-full">
                             <CheckCircle2 className="w-4 h-4" /> Start
                           </div>
                         )}
@@ -195,7 +200,7 @@ export default function FlowEditor({
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-3">
-                        <Label className="text-xs text-muted-foreground">Branches (User Answers)</Label>
+                        <span className="eyebrow">Branches (User Answers)</span>
                         {node.branches.map(branch => (
                           <div key={branch.id} className="flex items-center gap-3 bg-muted/50 p-2 rounded-lg">
                             <Input

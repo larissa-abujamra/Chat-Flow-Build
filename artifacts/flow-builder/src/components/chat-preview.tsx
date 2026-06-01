@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { FlowInput, ChatMessage, ChatResult, useSendChat } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, RotateCcw, Bot, User, Loader2 } from "lucide-react";
 
 export default function ChatPreview({ 
@@ -94,10 +93,12 @@ export default function ChatPreview({
   }, [messages, sendChat.isPending]);
 
   return (
-    <div className="flex flex-col h-full bg-card shadow-[-4px_0_24px_rgba(0,0,0,0.2)] z-20">
+    <div className="flex flex-col h-full bg-card border-l border-border z-20">
       <div className="p-4 border-b border-border bg-sidebar flex items-center justify-between shrink-0">
         <h3 className="font-bold flex items-center gap-2">
-          <Bot className="w-5 h-5 text-primary" />
+          <span className="w-7 h-7 rounded-full brand-gradient flex items-center justify-center">
+            <Bot className="w-4 h-4 text-white" />
+          </span>
           Preview
         </h3>
         <Button variant="ghost" size="sm" onClick={handleRestart} disabled={sendChat.isPending} className="h-8 gap-2">
@@ -117,13 +118,13 @@ export default function ChatPreview({
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-primary" />}
+              <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'user' ? 'bg-muted' : 'brand-gradient'}`}>
+                {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4 text-white" />}
               </div>
-              <div className={`p-3 rounded-2xl text-sm ${
-                msg.role === 'user' 
-                  ? 'bg-primary text-primary-foreground rounded-tr-sm' 
-                  : 'bg-muted rounded-tl-sm'
+              <div className={`px-3.5 py-2.5 text-sm whitespace-pre-wrap ${
+                msg.role === 'user'
+                  ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm'
+                  : 'bg-secondary text-foreground rounded-r-2xl rounded-bl-2xl border-l-[3px] border-waz'
               }`}>
                 {msg.content}
               </div>
@@ -134,10 +135,10 @@ export default function ChatPreview({
         {sendChat.isPending && (
           <div className="flex justify-start">
             <div className="flex gap-3 max-w-[85%]">
-              <div className="shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                <Bot className="w-4 h-4 text-primary" />
+              <div className="shrink-0 w-8 h-8 rounded-full brand-gradient flex items-center justify-center">
+                <Bot className="w-4 h-4 text-white" />
               </div>
-              <div className="p-3 rounded-2xl text-sm bg-muted rounded-tl-sm flex items-center gap-2">
+              <div className="px-3.5 py-2.5 text-sm bg-secondary rounded-r-2xl rounded-bl-2xl border-l-[3px] border-waz flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin opacity-50" />
                 <span className="opacity-50">Thinking...</span>
               </div>

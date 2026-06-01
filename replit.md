@@ -43,8 +43,8 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
   - **Flow Chart** (draggable node graph, React Flow / `@xyflow/react`): each node edits its question and answers inline (answer text input + target dropdown + delete, plus "Add answer"). Drag boxes to reposition (persisted via the optional `position` field on each node), drag from a node's bottom handle to another node to create a branch, and delete edges/nodes to remove branches/nodes.
   - **List**: a scrollable column of node cards; each card edits the question, sets/marks the Start node, deletes the node, and edits branches (label input + target dropdown + delete, plus "Add Branch").
 - Save the flow to persist it.
-- Live chat preview: type answers, a real LLM matches each answer to a branch and advances; non-matching answers re-ask; conversation ends at leaf/end nodes.
-- Light theme with pink (primary), blue, and green accents.
+- Live chat preview: type answers, a real LLM matches each answer to a branch and advances; non-matching answers re-ask; conversation ends at leaf/end nodes. As the chat advances, the current question node is highlighted with a green (waz) outline in both Flow Chart and List views (wired via `currentNodeId` → `onActiveNodeChange` → `activeNodeId` → node `isActive`).
+- "Squad" design system: light theme, Fustat font (loaded once in `index.html`), ink (near-black) primary, brand gradient `maky → waz → fin` (`.brand-gradient`), pill buttons, mono uppercase `.eyebrow` micro-labels, minimal shadows. Active/Start states use the green `waz` token. Squad color tokens (`maky`/`waz`/`fin`/`ink-3`) are registered in `@theme inline` so `bg-*`/`text-*`/`border-*`/`ring-*` utilities work.
 
 ## User preferences
 

@@ -84,22 +84,23 @@ function computeLayout(flow: FlowInput): Record<string, { x: number; y: number }
 function QuestionNode({ id, data }: NodeProps<QNode>) {
   return (
     <div
-      className={`rounded-xl border-2 bg-card shadow-sm w-80 transition-colors ${
+      className={`rounded-xl border-2 bg-card w-80 transition-all duration-200 ${
         data.isActive
-          ? "border-primary ring-2 ring-primary/30"
+          ? "border-waz ring-4 ring-waz/25 shadow-[0_0_0_1px_hsl(var(--waz))]"
           : data.isStart
-            ? "border-green-400"
+            ? "border-waz/40"
             : "border-border"
       }`}
     >
-      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-blue-400 !border-2 !border-card" />
+      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-fin !border-2 !border-card" />
       <div className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            Question
+          <span className="eyebrow flex items-center gap-1.5">
+            {data.isActive && <span className="w-1.5 h-1.5 rounded-full bg-waz animate-pulse" />}
+            {data.isActive ? "Active" : "Question"}
           </span>
           {data.isStart ? (
-            <span className="flex items-center gap-1 text-green-600 text-[10px] font-bold px-1.5 py-0.5 bg-green-500/10 rounded">
+            <span className="flex items-center gap-1 text-waz text-[10px] font-bold px-1.5 py-0.5 bg-waz/10 rounded-full">
               <CheckCircle2 className="w-3 h-3" /> Start
             </span>
           ) : (
@@ -123,9 +124,7 @@ function QuestionNode({ id, data }: NodeProps<QNode>) {
         />
 
         <div className="space-y-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            Answers
-          </span>
+          <span className="eyebrow">Answers</span>
           {data.branches.length === 0 && (
             <p className="text-[11px] text-muted-foreground italic">No answers yet.</p>
           )}
@@ -316,11 +315,11 @@ export default function FlowChart({
             target: b.targetNodeId,
             label: b.label || "answer",
             animated: true,
-            style: { stroke: "hsl(330 81% 60%)", strokeWidth: 2 },
-            labelStyle: { fill: "hsl(222 47% 14%)", fontSize: 12, fontWeight: 600 },
+            style: { stroke: "hsl(218 11% 72%)", strokeWidth: 1.5 },
+            labelStyle: { fill: "hsl(222 40% 11%)", fontSize: 12, fontWeight: 600 },
             labelBgStyle: { fill: "hsl(0 0% 100%)" },
             labelBgPadding: [6, 3],
-            labelBgBorderRadius: 6,
+            labelBgBorderRadius: 999,
           });
         }
       });
@@ -409,7 +408,7 @@ export default function FlowChart({
       <button
         type="button"
         onClick={addNode}
-        className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90"
+        className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-black transition-colors"
       >
         <Plus className="w-4 h-4" /> Add Node
       </button>
@@ -430,9 +429,12 @@ export default function FlowChart({
         <MiniMap
           pannable
           zoomable
-          nodeColor={(n) =>
-            (n.data as QuestionNodeData)?.isStart ? "hsl(145 63% 55%)" : "hsl(330 81% 70%)"
-          }
+          nodeColor={(n) => {
+            const d = n.data as QuestionNodeData;
+            if (d?.isActive) return "hsl(144 63% 48%)";
+            if (d?.isStart) return "hsl(144 63% 70%)";
+            return "hsl(218 11% 78%)";
+          }}
         />
       </ReactFlow>
     </div>
