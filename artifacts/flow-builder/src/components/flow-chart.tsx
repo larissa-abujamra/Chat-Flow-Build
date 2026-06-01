@@ -422,6 +422,10 @@ export default function FlowChart({
         onConnect={onConnect}
         onNodesDelete={onNodesDelete}
         fitView
+        panOnScroll
+        selectionOnDrag
+        panOnDrag={[1, 2]}
+        zoomOnScroll={false}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(220 16% 88%)" />

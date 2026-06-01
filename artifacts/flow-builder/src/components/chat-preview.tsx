@@ -2,14 +2,16 @@ import { useState, useRef, useEffect } from "react";
 import { FlowInput, ChatMessage, ChatResult, useSendChat } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, RotateCcw, Bot, User, Loader2 } from "lucide-react";
+import { Send, RotateCcw, Bot, User, Loader2, PanelRightClose } from "lucide-react";
 
 export default function ChatPreview({ 
   flow,
-  onActiveNodeChange
+  onActiveNodeChange,
+  onCollapse
 }: { 
   flow: FlowInput;
   onActiveNodeChange: (nodeId: string | null) => void;
+  onCollapse?: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
@@ -101,9 +103,16 @@ export default function ChatPreview({
           </span>
           Preview
         </h3>
-        <Button variant="ghost" size="sm" onClick={handleRestart} disabled={sendChat.isPending} className="h-8 gap-2">
-          <RotateCcw className="w-3.5 h-3.5" /> Restart
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={handleRestart} disabled={sendChat.isPending} className="h-8 gap-2">
+            <RotateCcw className="w-3.5 h-3.5" /> Restart
+          </Button>
+          {onCollapse && (
+            <Button variant="ghost" size="icon" onClick={onCollapse} className="h-8 w-8" title="Collapse preview">
+              <PanelRightClose className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
