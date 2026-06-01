@@ -283,10 +283,11 @@ export default function FlowChart({
             isActive: activeNodeId === n.id,
             branches: n.branches,
             targetOptions: flow.nodes
-              .filter((o) => o.id !== n.id)
-              .map((o) => ({
+              .map((o, oi) => ({ o, oi }))
+              .filter(({ o }) => o.id !== n.id)
+              .map(({ o, oi }) => ({
                 id: o.id,
-                label: o.question.slice(0, 28) + (o.question.length > 28 ? "…" : "") || "Untitled",
+                label: `${oi + 1}. ${o.question.slice(0, 25) + (o.question.length > 25 ? "…" : "") || "Untitled"}`,
               })),
             onQuestionChange,
             onSetStart,

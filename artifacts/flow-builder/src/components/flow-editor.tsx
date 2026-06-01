@@ -241,11 +241,14 @@ export default function FlowEditor({
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="end">End of conversation</SelectItem>
-                                {flow.nodes.filter(n => n.id !== node.id).map(n => (
-                                  <SelectItem key={n.id} value={n.id}>
-                                    {n.question.substring(0, 20)}{n.question.length > 20 ? '...' : ''}
-                                  </SelectItem>
-                                ))}
+                                {flow.nodes
+                                  .map((n, idx) => ({ n, idx }))
+                                  .filter(({ n }) => n.id !== node.id)
+                                  .map(({ n, idx }) => (
+                                    <SelectItem key={n.id} value={n.id}>
+                                      {idx + 1}. {n.question.substring(0, 20)}{n.question.length > 20 ? '...' : ''}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeBranch(node.id, branch.id)}>
