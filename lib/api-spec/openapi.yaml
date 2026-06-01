@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: flow
+    description: Conversation flow editing
+  - name: chat
+    description: Chat preview powered by an LLM
 paths:
   /healthz:
     get:
@@ -24,6 +28,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /flow:
+    get:
+      operationId: getFlow
+      tags: [flow]
+      summary: Get the conversation flow
+      description: Returns the saved conversation flow, creating a default one if none exists.
+      responses:
+        "200":
+          description: The conversation flow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+    put:
+      operationId: updateFlow
+      tags: [flow]
+      summary: Save the conversation flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlowInput"
+      responses:
+        "200":
+          description: The saved conversation flow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flow"
+  /chat:
+    post:
+      operationId: sendChat
+      tags: [chat]
+      summary: Advance the chat preview
+      description: >
+        Given the current flow, conversation history, and current node, uses an
+        LLM to interpret the latest answer, route to the matching branch, and
+        return the next message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: The assistant's next message and updated position
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResult"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +89,86 @@ components:
           type: string
       required:
         - status
-
+    FlowBranch:
+      type: object
+      required: [id, label, targetNodeId]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        targetNodeId:
+          type: ["string", "null"]
+    FlowNode:
+      type: object
+      required: [id, question, branches]
+      properties:
+        id:
+          type: string
+        question:
+          type: string
+        branches:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowBranch"
+    Flow:
+      type: object
+      required: [id, name, startNodeId, nodes, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        startNodeId:
+          type: ["string", "null"]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowNode"
+        updatedAt:
+          type: string
+    FlowInput:
+      type: object
+      required: [name, startNodeId, nodes]
+      properties:
+        name:
+          type: string
+        startNodeId:
+          type: ["string", "null"]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowNode"
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+    ChatInput:
+      type: object
+      required: [flow, messages, currentNodeId]
+      properties:
+        flow:
+          $ref: "#/components/schemas/FlowInput"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        currentNodeId:
+          type: ["string", "null"]
+    ChatResult:
+      type: object
+      required: [reply, currentNodeId, matchedBranchId, done]
+      properties:
+        reply:
+          type: string
+        currentNodeId:
+          type: ["string", "null"]
+        matchedBranchId:
+          type: ["string", "null"]
+        done:
+          type: boolean
