@@ -6,6 +6,7 @@ export interface FlowBranchData {
   id: string;
   label: string;
   targetNodeId: string | null;
+  color?: string | null;
 }
 
 export interface FlowNodeData {

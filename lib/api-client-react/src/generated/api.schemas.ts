@@ -14,6 +14,8 @@ export interface FlowBranch {
   label: string;
   /** @nullable */
   targetNodeId: string | null;
+  /** @nullable */
+  color?: string | null;
 }
 
 export type FlowNodePosition = {

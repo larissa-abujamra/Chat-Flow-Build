@@ -19,6 +19,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { FlowInput, FlowNode, FlowBranch } from "@workspace/api-client-react";
 import { Flag, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import BranchColorBadge from "@/components/branch-color-badge";
 
 type BranchTargetOption = { id: string; label: string };
 
@@ -34,6 +35,7 @@ type QuestionNodeData = {
   onAddBranch: (nodeId: string) => void;
   onBranchLabelChange: (nodeId: string, branchId: string, value: string) => void;
   onBranchTargetChange: (nodeId: string, branchId: string, target: string | null) => void;
+  onBranchColorChange: (nodeId: string, branchId: string, color: string | null) => void;
   onRemoveBranch: (nodeId: string, branchId: string) => void;
 };
 
@@ -135,9 +137,12 @@ function QuestionNode({ id, data }: NodeProps<QNode>) {
           {data.branches.map((branch, bi) => (
             <div key={branch.id} className="space-y-1 rounded-md bg-muted/50 p-1.5">
               <div className="flex items-center gap-1.5">
-                <span className="shrink-0 inline-flex items-center justify-center min-w-[28px] h-6 px-1 rounded bg-waz/15 text-waz text-[10px] font-bold">
-                  {data.number}{String.fromCharCode(65 + bi)}
-                </span>
+                <BranchColorBadge
+                  size="sm"
+                  label={`${data.number}${String.fromCharCode(65 + bi)}`}
+                  color={branch.color}
+                  onChange={(c) => data.onBranchColorChange(id, branch.id, c)}
+                />
                 <input
                   value={branch.label}
                   onChange={(e) => data.onBranchLabelChange(id, branch.id, e.target.value)}
@@ -254,6 +259,17 @@ export default function FlowChart({
     [flow.nodes, updateNode],
   );
 
+  const onBranchColorChange = useCallback(
+    (nodeId: string, branchId: string, color: string | null) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      updateNode(nodeId, {
+        branches: node.branches.map((b) => (b.id === branchId ? { ...b, color } : b)),
+      });
+    },
+    [flow.nodes, updateNode],
+  );
+
   const onRemoveBranch = useCallback(
     (nodeId: string, branchId: string) => {
       const node = flow.nodes.find((n) => n.id === nodeId);
@@ -294,6 +310,7 @@ export default function FlowChart({
             onAddBranch,
             onBranchLabelChange,
             onBranchTargetChange,
+            onBranchColorChange,
             onRemoveBranch,
           },
         } as QNode;
@@ -309,6 +326,7 @@ export default function FlowChart({
     onAddBranch,
     onBranchLabelChange,
     onBranchTargetChange,
+    onBranchColorChange,
     onRemoveBranch,
     setRfNodes,
   ]);

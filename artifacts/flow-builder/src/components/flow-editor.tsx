@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Save, Flag, CheckCircle2, List, Workflow, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FlowChart from "@/components/flow-chart";
+import BranchColorBadge from "@/components/branch-color-badge";
 
 export default function FlowEditor({
   flow,
@@ -222,9 +223,11 @@ export default function FlowEditor({
                         <span className="eyebrow">Branches (User Answers)</span>
                         {node.branches.map((branch, bi) => (
                           <div key={branch.id} className="flex items-center gap-3 bg-muted/50 p-2 rounded-lg">
-                            <span className="shrink-0 inline-flex items-center justify-center min-w-[34px] h-8 px-1.5 rounded-md bg-waz/15 text-waz text-xs font-bold">
-                              {ni + 1}{String.fromCharCode(65 + bi)}
-                            </span>
+                            <BranchColorBadge
+                              label={`${ni + 1}${String.fromCharCode(65 + bi)}`}
+                              color={branch.color}
+                              onChange={c => updateBranch(node.id, branch.id, { color: c })}
+                            />
                             <Input
                               value={branch.label}
                               onChange={e => updateBranch(node.id, branch.id, { label: e.target.value })}

@@ -31,7 +31,8 @@ export const GetFlowResponse = zod.object({
   "branches": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "targetNodeId": zod.string().nullable()
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
 })),
   "position": zod.object({
   "x": zod.number(),
@@ -54,7 +55,8 @@ export const UpdateFlowBody = zod.object({
   "branches": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "targetNodeId": zod.string().nullable()
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
 })),
   "position": zod.object({
   "x": zod.number(),
@@ -73,7 +75,8 @@ export const UpdateFlowResponse = zod.object({
   "branches": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "targetNodeId": zod.string().nullable()
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
 })),
   "position": zod.object({
   "x": zod.number(),
@@ -99,7 +102,8 @@ export const SendChatBody = zod.object({
   "branches": zod.array(zod.object({
   "id": zod.string(),
   "label": zod.string(),
-  "targetNodeId": zod.string().nullable()
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
 })),
   "position": zod.object({
   "x": zod.number(),
