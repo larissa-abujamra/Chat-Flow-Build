@@ -10,6 +10,31 @@ const RESEARCH_NODE_ID = "companyResearch";
 // stuck request (network/proxy hang) and turns it into a recoverable error.
 const REQUEST_TIMEOUT_MS = 60000;
 
+// Authors split one reply into several human-feeling bubbles by putting a line
+// containing only "---" where they want a break. Each chunk is sent in sequence
+// with a short typing pause between, so it reads like someone typing.
+function splitIntoBubbles(text: string): string[] {
+  const groups: string[] = [];
+  let current: string[] = [];
+  for (const line of text.split("\n")) {
+    if (line.trim() === "---") {
+      groups.push(current.join("\n"));
+      current = [];
+    } else {
+      current.push(line);
+    }
+  }
+  groups.push(current.join("\n"));
+  const parts = groups.map((g) => g.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : [text];
+}
+
+// Pause before the next bubble, scaled to its length so longer lines "take
+// longer to type". Bounded so the conversation never drags.
+function typingDelayFor(text: string): number {
+  return Math.min(1600, 450 + text.length * 14);
+}
+
 export default function ChatPreview({ 
   flow,
   onActiveNodeChange,
@@ -25,9 +50,11 @@ export default function ChatPreview({
   const [isDone, setIsDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [revealing, setRevealing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendChat = useSendChat();
 
   const clearTimer = () => {
@@ -35,6 +62,45 @@ export default function ChatPreview({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+  };
+
+  const clearReveal = () => {
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+  };
+
+  // Reveal an assistant reply as one or more bubbles, one after another, with a
+  // typing pause between. `finalize` runs once every bubble is shown, so node
+  // highlight / done state only update when the conversation is ready for input.
+  const revealReply = (reply: string, session: number, finalize: () => void) => {
+    clearReveal();
+    const parts = splitIntoBubbles(reply);
+    setMessages((prev) => [...prev, { role: "assistant", content: parts[0] }]);
+
+    if (parts.length === 1) {
+      finalize();
+      return;
+    }
+
+    setRevealing(true);
+    let i = 1;
+    const step = () => {
+      if (session !== sessionRef.current) {
+        setRevealing(false);
+        return;
+      }
+      setMessages((prev) => [...prev, { role: "assistant", content: parts[i] }]);
+      i += 1;
+      if (i < parts.length) {
+        revealTimerRef.current = setTimeout(step, typingDelayFor(parts[i]));
+      } else {
+        setRevealing(false);
+        finalize();
+      }
+    };
+    revealTimerRef.current = setTimeout(step, typingDelayFor(parts[1]));
   };
 
   const startTimer = () => {
@@ -74,10 +140,12 @@ export default function ChatPreview({
       onSuccess: (res: ChatResult) => {
         if (session !== sessionRef.current) return;
         clearTimer();
-        setMessages(prev => [...prev, { role: "assistant", content: res.reply }]);
-        setCurrentNodeId(res.currentNodeId);
-        setIsDone(res.done);
-        onActiveNodeChange(res.currentNodeId);
+        revealReply(res.reply, session, () => {
+          if (session !== sessionRef.current) return;
+          setCurrentNodeId(res.currentNodeId);
+          setIsDone(res.done);
+          onActiveNodeChange(res.currentNodeId);
+        });
       },
       onError: () => {
         if (session !== sessionRef.current) return;
@@ -90,6 +158,8 @@ export default function ChatPreview({
   const handleRestart = () => {
     const session = sessionRef.current + 1;
     sessionRef.current = session;
+    clearReveal();
+    setRevealing(false);
     setMessages([]);
     setCurrentNodeId(null);
     setIsDone(false);
@@ -108,10 +178,12 @@ export default function ChatPreview({
       onSuccess: (res: ChatResult) => {
         if (session !== sessionRef.current) return;
         clearTimer();
-        setMessages([{ role: "assistant", content: res.reply }]);
-        setCurrentNodeId(res.currentNodeId);
-        setIsDone(res.done);
-        onActiveNodeChange(res.currentNodeId);
+        revealReply(res.reply, session, () => {
+          if (session !== sessionRef.current) return;
+          setCurrentNodeId(res.currentNodeId);
+          setIsDone(res.done);
+          onActiveNodeChange(res.currentNodeId);
+        });
       },
       onError: () => {
         if (session !== sessionRef.current) return;
@@ -121,7 +193,7 @@ export default function ChatPreview({
     });
   };
 
-  const busy = sendChat.isPending && !timedOut;
+  const busy = (sendChat.isPending || revealing) && !timedOut;
 
   // The current node's answer leads into the web-research step, which makes an
   // extra (slower) web lookup — surface that so the longer wait reads as
@@ -136,7 +208,12 @@ export default function ChatPreview({
     }
   }, [messages, busy]);
 
-  useEffect(() => clearTimer, []);
+  useEffect(() => {
+    return () => {
+      clearTimer();
+      clearReveal();
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-card border-l border-border z-20">
