@@ -41,7 +41,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setPreviewCollapsed(false)}
-            className="absolute top-4 right-4 z-20 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted transition-colors"
+            className="absolute top-[96px] right-4 z-20 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-sm font-medium shadow-sm hover:bg-muted transition-colors"
             title="Show preview"
           >
             <PanelRightOpen className="w-4 h-4" /> Preview
