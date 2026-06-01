@@ -54,6 +54,7 @@ export default function Home() {
             flow={liveFlow} 
             onActiveNodeChange={setActiveNodeId}
             onCollapse={() => setPreviewCollapsed(true)}
+            previewHref={`${import.meta.env.BASE_URL}preview`}
           />
         </div>
       )}

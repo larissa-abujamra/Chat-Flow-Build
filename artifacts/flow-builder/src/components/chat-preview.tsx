@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { FlowInput, ChatMessage, ChatResult, useSendChat } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, RotateCcw, Bot, User, Loader2, PanelRightClose } from "lucide-react";
+import { Send, RotateCcw, Bot, User, Loader2, PanelRightClose, ExternalLink } from "lucide-react";
 
 const RESEARCH_NODE_ID = "companyResearch";
 // Last-resort client timeout. The server bounds its own LLM/search calls
@@ -38,11 +38,13 @@ function typingDelayFor(text: string): number {
 export default function ChatPreview({ 
   flow,
   onActiveNodeChange,
-  onCollapse
+  onCollapse,
+  previewHref
 }: { 
   flow: FlowInput;
   onActiveNodeChange: (nodeId: string | null) => void;
   onCollapse?: () => void;
+  previewHref?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
@@ -222,12 +224,28 @@ export default function ChatPreview({
   return (
     <div className="flex flex-col h-full bg-card border-l border-border z-20">
       <div className="p-4 border-b border-border bg-sidebar flex items-center justify-between shrink-0">
-        <h3 className="font-bold flex items-center gap-2">
-          <span className="w-7 h-7 rounded-full brand-gradient flex items-center justify-center">
-            <Bot className="w-4 h-4 text-white" />
-          </span>
-          Preview
-        </h3>
+        {previewHref ? (
+          <a
+            href={previewHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group font-bold flex items-center gap-2 hover:text-primary transition-colors"
+            title="Open shareable preview in a new tab"
+          >
+            <span className="w-7 h-7 rounded-full brand-gradient flex items-center justify-center">
+              <Bot className="w-4 h-4 text-white" />
+            </span>
+            Preview
+            <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </a>
+        ) : (
+          <h3 className="font-bold flex items-center gap-2">
+            <span className="w-7 h-7 rounded-full brand-gradient flex items-center justify-center">
+              <Bot className="w-4 h-4 text-white" />
+            </span>
+            Preview
+          </h3>
+        )}
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleRestart} disabled={busy} className="h-8 gap-2">
             <RotateCcw className="w-3.5 h-3.5" /> Restart
