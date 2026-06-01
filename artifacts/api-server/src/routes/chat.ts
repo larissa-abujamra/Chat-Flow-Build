@@ -116,18 +116,24 @@ Decide which branch the user's latest message best matches. Then write a short, 
 Always reply in the same language as the conversation. Respond ONLY as JSON: {"matchedBranchId": <branch id string or null>, "offTopicQuestion": <boolean>, "reply": <string>}.`;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      max_completion_tokens: 8192,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Conversation so far:\n${transcript}\n\nThe user's latest message: "${lastUser.content}"`,
-        },
-      ],
-    });
+    const completion = await openai.chat.completions.create(
+      {
+        model: "gpt-5-mini",
+        max_completion_tokens: 8192,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Conversation so far:\n${transcript}\n\nThe user's latest message: "${lastUser.content}"`,
+          },
+        ],
+      },
+      // Bound the classification call so a stalled upstream fails fast (502)
+      // instead of hanging the request forever. Sonar calls have their own
+      // timeouts below.
+      { timeout: 25000 },
+    );
 
     const raw = completion.choices[0]?.message?.content ?? "{}";
     const result = JSON.parse(raw) as {
