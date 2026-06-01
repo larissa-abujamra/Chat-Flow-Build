@@ -18,15 +18,22 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FlowInput, FlowNode, FlowBranch } from "@workspace/api-client-react";
-import { Flag, CheckCircle2, Plus } from "lucide-react";
+import { Flag, CheckCircle2, Plus, Trash2 } from "lucide-react";
+
+type BranchTargetOption = { id: string; label: string };
 
 type QuestionNodeData = {
   label: string;
   isStart: boolean;
   isActive: boolean;
-  endBranches: string[];
+  branches: FlowBranch[];
+  targetOptions: BranchTargetOption[];
   onQuestionChange: (id: string, value: string) => void;
   onSetStart: (id: string) => void;
+  onAddBranch: (nodeId: string) => void;
+  onBranchLabelChange: (nodeId: string, branchId: string, value: string) => void;
+  onBranchTargetChange: (nodeId: string, branchId: string, target: string | null) => void;
+  onRemoveBranch: (nodeId: string, branchId: string) => void;
 };
 
 type QNode = Node<QuestionNodeData>;
@@ -68,7 +75,7 @@ function computeLayout(flow: FlowInput): Record<string, { x: number; y: number }
   const pos: Record<string, { x: number; y: number }> = {};
   Object.entries(byLevel).forEach(([l, ids]) => {
     ids.forEach((id, i) => {
-      pos[id] = { x: i * 320 + 40, y: Number(l) * 220 + 40 };
+      pos[id] = { x: i * 380 + 40, y: Number(l) * 460 + 40 };
     });
   });
   return pos;
@@ -77,7 +84,7 @@ function computeLayout(flow: FlowInput): Record<string, { x: number; y: number }
 function QuestionNode({ id, data }: NodeProps<QNode>) {
   return (
     <div
-      className={`rounded-xl border-2 bg-card shadow-sm w-72 transition-colors ${
+      className={`rounded-xl border-2 bg-card shadow-sm w-80 transition-colors ${
         data.isActive
           ? "border-primary ring-2 ring-primary/30"
           : data.isStart
@@ -86,7 +93,7 @@ function QuestionNode({ id, data }: NodeProps<QNode>) {
       }`}
     >
       <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-blue-400 !border-2 !border-card" />
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
             Question
@@ -106,24 +113,67 @@ function QuestionNode({ id, data }: NodeProps<QNode>) {
             </button>
           )}
         </div>
+
         <textarea
           value={data.label}
           onChange={(e) => data.onQuestionChange(id, e.target.value)}
           rows={2}
+          placeholder="Question / message"
           className="nodrag nowheel w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary"
         />
-        {data.endBranches.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {data.endBranches.map((label, i) => (
-              <span
-                key={i}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-              >
-                {label || "answer"} → End
-              </span>
-            ))}
-          </div>
-        )}
+
+        <div className="space-y-1.5">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+            Answers
+          </span>
+          {data.branches.length === 0 && (
+            <p className="text-[11px] text-muted-foreground italic">No answers yet.</p>
+          )}
+          {data.branches.map((branch) => (
+            <div key={branch.id} className="space-y-1 rounded-md bg-muted/50 p-1.5">
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={branch.label}
+                  onChange={(e) => data.onBranchLabelChange(id, branch.id, e.target.value)}
+                  placeholder="e.g. Yes"
+                  className="nodrag nowheel flex-1 min-w-0 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => data.onRemoveBranch(id, branch.id)}
+                  className="nodrag shrink-0 text-muted-foreground hover:text-destructive"
+                  title="Remove answer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground shrink-0">→</span>
+                <select
+                  value={branch.targetNodeId ?? "end"}
+                  onChange={(e) =>
+                    data.onBranchTargetChange(id, branch.id, e.target.value === "end" ? null : e.target.value)
+                  }
+                  className="nodrag nowheel flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="end">End of conversation</option>
+                  {data.targetOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => data.onAddBranch(id)}
+            className="nodrag flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary"
+          >
+            <Plus className="w-3 h-3" /> Add answer
+          </button>
+        </div>
       </div>
       <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-primary !border-2 !border-card" />
     </div>
@@ -166,6 +216,47 @@ export default function FlowChart({
     [flow, onChange],
   );
 
+  const onAddBranch = useCallback(
+    (nodeId: string) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      const newBranch: FlowBranch = { id: crypto.randomUUID(), label: "New answer", targetNodeId: null };
+      updateNode(nodeId, { branches: [...node.branches, newBranch] });
+    },
+    [flow.nodes, updateNode],
+  );
+
+  const onBranchLabelChange = useCallback(
+    (nodeId: string, branchId: string, value: string) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      updateNode(nodeId, {
+        branches: node.branches.map((b) => (b.id === branchId ? { ...b, label: value } : b)),
+      });
+    },
+    [flow.nodes, updateNode],
+  );
+
+  const onBranchTargetChange = useCallback(
+    (nodeId: string, branchId: string, target: string | null) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      updateNode(nodeId, {
+        branches: node.branches.map((b) => (b.id === branchId ? { ...b, targetNodeId: target } : b)),
+      });
+    },
+    [flow.nodes, updateNode],
+  );
+
+  const onRemoveBranch = useCallback(
+    (nodeId: string, branchId: string) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      updateNode(nodeId, { branches: node.branches.filter((b) => b.id !== branchId) });
+    },
+    [flow.nodes, updateNode],
+  );
+
   // Reconcile React Flow node state from app state, preserving existing
   // positions and measured dimensions so dragging stays initialized.
   useEffect(() => {
@@ -183,14 +274,36 @@ export default function FlowChart({
             label: n.question,
             isStart: flow.startNodeId === n.id,
             isActive: activeNodeId === n.id,
-            endBranches: n.branches.filter((b) => !b.targetNodeId).map((b) => b.label),
+            branches: n.branches,
+            targetOptions: flow.nodes
+              .filter((o) => o.id !== n.id)
+              .map((o) => ({
+                id: o.id,
+                label: o.question.slice(0, 28) + (o.question.length > 28 ? "…" : "") || "Untitled",
+              })),
             onQuestionChange,
             onSetStart,
+            onAddBranch,
+            onBranchLabelChange,
+            onBranchTargetChange,
+            onRemoveBranch,
           },
         } as QNode;
       });
     });
-  }, [flow.nodes, flow.startNodeId, activeNodeId, layout, onQuestionChange, onSetStart, setRfNodes]);
+  }, [
+    flow.nodes,
+    flow.startNodeId,
+    activeNodeId,
+    layout,
+    onQuestionChange,
+    onSetStart,
+    onAddBranch,
+    onBranchLabelChange,
+    onBranchTargetChange,
+    onRemoveBranch,
+    setRfNodes,
+  ]);
 
   useEffect(() => {
     const edges: Edge[] = [];

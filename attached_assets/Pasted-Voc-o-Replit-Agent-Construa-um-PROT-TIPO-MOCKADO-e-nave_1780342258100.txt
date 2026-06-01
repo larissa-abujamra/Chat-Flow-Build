@@ -1,0 +1,71 @@
+Você é o Replit Agent. Construa um PROTÓTIPO MOCKADO e navegável da conversa de onboarding do agente "Waz", do app Squad. É só pra eu sentir e testar o FLUXO da conversa — sem APIs reais, sem backend, sem banco. Prioridade: rodar rápido e ser fácil de testar os branches.
+
+STACK
+- Vite + React. Tailwind. Roda com npm run dev e abre direto.
+- Mobile-first: tudo dentro de uma moldura de celular (~390px) centralizada. O PAINEL DE DEV fica FORA da moldura, ao lado.
+- Português do Brasil. Visual minimalista, fonte Fustat (Google Fonts, fallback sans-serif), cantos arredondados. Chat: balões do Waz à esquerda, do usuário à direita, indicador "digitando..." com pequeno delay pra dar ritmo, auto-scroll pro fim.
+
+REGRAS DURAS
+- MOCKE TUDO. Nome da empresa, catálogo "encontrado", tom de voz gerado, conexão do Instagram: tudo canned. Sem chamada de API.
+- NÃO construa o formulário de entrada (Etapa 1) nem scraping — o protótipo começa na boas-vindas. Use um nome mockado (default "Lari", editável no painel de dev).
+- Todo o estado do fluxo numa máquina de estados central; o painel de dev só seta esse estado.
+
+FLUXO
+
+ETAPA 2 — BOAS-VINDAS (chat)
+- Waz: "Oi, {nome}! Bem-vindo ao Squad 👋"
+- Waz: "Aqui você tem três agentes: o Maky cuida do marketing, eu (Waz) cuido do atendimento, e o Fin cuida do financeiro."
+- Waz: "A maioria das marcas começa por mim — eu respondo seus clientes no WhatsApp e no Instagram. Marcas como Boca Rosa e Scherbis começaram pelo atendimento." (texto placeholder — ver nota)
+- DECISÃO: "Quer começar me configurando?" → botões [Sim, bora] / [Quero outro agente]
+  - "Quero outro agente" → tela placeholder simples "Os outros agentes estão chegando em breve" + botão "Voltar" que retorna à decisão.
+  - "Sim, bora" → Etapa 3.
+
+ETAPA 3 — CONFIGURAÇÃO DO WAZ (chat), quebrada assim:
+
+Passo 1 — Catálogo
+- Waz: "Achei esses produtos seus. Esse é o seu catálogo?" + mostra um CARD com catálogo mockado (4 itens; alguns com preço, outros marcados "preço a confirmar" — NUNCA invente preço onde não tem).
+- Botões [Sim, é isso] / [Falta coisa]
+  - "Falta coisa" → Waz: "Sem problema, você ajusta cada item depois no painel." (mock, segue)
+- Waz: "Qual desses é o carro-chefe?" → botões com os nomes dos produtos (escolha rápida) → segue.
+
+Passo 2 — Conectar Instagram (pra tom de voz)
+- Waz: "Quer conectar seu Instagram pra eu aprender seu jeito de falar? Uso suas DMs e legendas só pra captar o tom."
+- Botões [Conectar Instagram] / [Agora não]
+  - "Conectar" → simula conexão (~1,5s, spinner) → "Pronto, conectei!" → Passo 3 (caminho "gerado").
+  - "Agora não" → pula pro Passo 3 (caminho "manual").
+
+Passo 3 — Tom de voz
+- Caminho GERADO (Instagram conectado): Waz: "Analisei suas conversas. Seu tom me parece afetuoso e acolhedor — algo assim:" + mostra um balão de EXEMPLO nesse tom (resposta a um cliente fake "Oii, vocês fazem bolo de pote?"). "Ficou a sua cara?" → [Sim, é meu tom] / [Quero ajustar]
+  - "Quero ajustar" → cai no caminho MANUAL.
+- Caminho MANUAL (sem Instagram, ou escolheu ajustar): Waz: "Sem problema, me diz: como você quer que eu converse?" + 4 cards selecionáveis, cada um com a MESMA resposta de exemplo no respectivo tom:
+  - Casual e descontraído / Afetuoso e acolhedor / Elegante e sofisticado / Atencioso e prestativo
+  - Usar o exemplo do cliente "Oii, vocês fazem bolo de pote?" e variar a resposta por tom (sem inventar preço/sabor específico — oferecer enviar as opções).
+- Depois (nos dois caminhos): Waz: "E emojis — uso sempre, às vezes ou nunca?" → [Sempre] / [Às vezes] / [Nunca]
+
+WAZ CONFIGURADO
+- Waz: "Prontinho! Já sei quem você é e como falar. Bora ver o que eu sei fazer?" → botão "Ver funcionalidades" → Etapa 4.
+
+ETAPA 4 — TOUR DE FUNCIONALIDADES (baseado em pendências)
+- Tela de "pendências": uma lista com um card por funcionalidade. Cada card abre um mini-demo interativo (mesma UI de chat). Ao concluir o demo, a pendência vira "concluída ✓". Quando todas terminam → tela final.
+- As 6 funcionalidades e seus mini-demos:
+  1. Co-piloto: cliente fake "Qual o valor do bolo de pote?" → o Waz PROPÕE um rascunho (que NÃO inventa preço — diz que vai confirmar com a equipe) → botões [Aprovar] / [Editar] / [Refazer].
+  2. Piloto automático: cliente fake "Qual o horário de vocês?" → mostra o Waz já tendo respondido sozinho, com um selo "respondido no automático" + explicação "nesse modo eu respondo sozinho o que já sei".
+  3. Nota interna: numa conversa, você adiciona uma nota que NÃO vai pro cliente (balão visualmente distinto, ex. fundo amarelo com "só a equipe vê"), ex. "cliente recorrente, caprichar no carinho".
+  4. Tarefa para o Waz: você delega uma tarefa (ex. "me lembra de confirmar o pedido da Ana amanhã às 9h") → ela aparece numa lista de tarefas do Waz.
+  5. Base de conhecimento: você adiciona uma informação (ex. "no fim de ano funcionamos até dia 23") → Waz: "Anotado, vou usar isso quando perguntarem".
+  6. Mensagem direta: você mesmo escreve e envia uma mensagem ao cliente, sem o Waz responder.
+- ONBOARDING CONCLUÍDO: "Tudo pronto! Seu Waz está no ar 🎉" + botão "Recomeçar a demo".
+
+PAINEL DE DEV (essencial — é como eu testo os caminhos sem editar código)
+- Botão "Reiniciar fluxo".
+- Input "Nome mockado".
+- Select "Ir para etapa" (boas-vindas / catálogo / instagram / tom / configurado / tour / fim).
+- Para cada decisão sim/não, um select com opção "perguntar no chat" OU forçar a resposta: "Começar pelo Waz?" (sim/não), "Conectar Instagram?" (conectar/não), "Gostou do tom?" (sim/não). Quando "perguntar", eu respondo clicando; quando forçado, o fluxo segue sozinho.
+- Checkboxes "Pendências do tour": quais das 6 funcionalidades começam pendentes (pra eu testar o tour com 1, 3 ou todas).
+
+NÃO FAÇA
+- Não construa formulário de entrada, scraping, backend, banco, auth, nem integração real com nenhuma API.
+- Não invente preços nem catálogo nos mocks (preço ausente = "a confirmar").
+
+ENTREGA
+App rodando no Preview, navegável da boas-vindas ao fim, com o painel de dev permitindo testar todos os branches.
