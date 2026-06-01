@@ -35,7 +35,6 @@ export default function Home() {
           flow={liveFlow} 
           onChange={setLiveFlow} 
           activeNodeId={activeNodeId} 
-          serverFlowId={serverFlow?.id}
         />
       </div>
       <div className="w-full md:w-1/3 flex flex-col h-[50vh] md:h-screen bg-card">

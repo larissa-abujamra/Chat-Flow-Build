@@ -14,7 +14,6 @@ export default function FlowEditor({
   flow: FlowInput;
   onChange: (f: FlowInput) => void;
   activeNodeId: string | null;
-  serverFlowId?: string;
 }) {
   const updateFlow = useUpdateFlow();
   const queryClient = useQueryClient();
