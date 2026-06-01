@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -7,10 +7,11 @@ import {
   Handle,
   Position,
   BackgroundVariant,
+  useNodesState,
+  useEdgesState,
   type Node,
   type Edge,
   type NodeProps,
-  type NodeChange,
   type EdgeChange,
   type Connection,
   type NodeTypes,
@@ -27,6 +28,8 @@ type QuestionNodeData = {
   onQuestionChange: (id: string, value: string) => void;
   onSetStart: (id: string) => void;
 };
+
+type QNode = Node<QuestionNodeData>;
 
 function computeLayout(flow: FlowInput): Record<string, { x: number; y: number }> {
   const level: Record<string, number> = {};
@@ -71,7 +74,7 @@ function computeLayout(flow: FlowInput): Record<string, { x: number; y: number }
   return pos;
 }
 
-function QuestionNode({ id, data }: NodeProps<Node<QuestionNodeData>>) {
+function QuestionNode({ id, data }: NodeProps<QNode>) {
   return (
     <div
       className={`rounded-xl border-2 bg-card shadow-sm w-72 transition-colors ${
@@ -140,6 +143,9 @@ export default function FlowChart({
 }) {
   const layout = useMemo(() => computeLayout(flow), [flow]);
 
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<QNode>([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
   const updateNode = useCallback(
     (id: string, updates: Partial<FlowNode>) => {
       onChange({
@@ -160,30 +166,38 @@ export default function FlowChart({
     [flow, onChange],
   );
 
-  const nodes: Node<QuestionNodeData>[] = useMemo(
-    () =>
-      flow.nodes.map((n) => ({
-        id: n.id,
-        type: "question",
-        position: n.position ?? layout[n.id] ?? { x: 40, y: 40 },
-        data: {
-          label: n.question,
-          isStart: flow.startNodeId === n.id,
-          isActive: activeNodeId === n.id,
-          endBranches: n.branches.filter((b) => !b.targetNodeId).map((b) => b.label),
-          onQuestionChange,
-          onSetStart,
-        },
-      })),
-    [flow.nodes, flow.startNodeId, activeNodeId, layout, onQuestionChange, onSetStart],
-  );
+  // Reconcile React Flow node state from app state, preserving existing
+  // positions and measured dimensions so dragging stays initialized.
+  useEffect(() => {
+    setRfNodes((prev) => {
+      const prevById = new Map(prev.map((n) => [n.id, n]));
+      return flow.nodes.map((n) => {
+        const existing = prevById.get(n.id);
+        const base = existing ?? ({} as Partial<QNode>);
+        return {
+          ...base,
+          id: n.id,
+          type: "question",
+          position: existing?.position ?? n.position ?? layout[n.id] ?? { x: 40, y: 40 },
+          data: {
+            label: n.question,
+            isStart: flow.startNodeId === n.id,
+            isActive: activeNodeId === n.id,
+            endBranches: n.branches.filter((b) => !b.targetNodeId).map((b) => b.label),
+            onQuestionChange,
+            onSetStart,
+          },
+        } as QNode;
+      });
+    });
+  }, [flow.nodes, flow.startNodeId, activeNodeId, layout, onQuestionChange, onSetStart, setRfNodes]);
 
-  const edges: Edge[] = useMemo(() => {
-    const result: Edge[] = [];
+  useEffect(() => {
+    const edges: Edge[] = [];
     flow.nodes.forEach((n) => {
       n.branches.forEach((b) => {
         if (b.targetNodeId) {
-          result.push({
+          edges.push({
             id: b.id,
             source: n.id,
             target: b.targetNodeId,
@@ -198,25 +212,16 @@ export default function FlowChart({
         }
       });
     });
-    return result;
-  }, [flow.nodes]);
+    setRfEdges(edges);
+  }, [flow.nodes, setRfEdges]);
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      let nextNodes = flow.nodes;
-      let changed = false;
-      for (const c of changes) {
-        if (c.type === "position" && c.position) {
-          nextNodes = nextNodes.map((n) =>
-            n.id === c.id ? { ...n, position: c.position! } : n,
-          );
-          changed = true;
-        }
-      }
-      if (changed) onChange({ ...flow, nodes: nextNodes });
-    },
-    [flow, onChange],
-  );
+  const onNodeDragStop = useCallback(() => {
+    const posById = new Map(rfNodes.map((n) => [n.id, n.position]));
+    onChange({
+      ...flow,
+      nodes: flow.nodes.map((n) => ({ ...n, position: posById.get(n.id) ?? n.position })),
+    });
+  }, [rfNodes, flow, onChange]);
 
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -235,9 +240,12 @@ export default function FlowChart({
     [flow.nodes, updateNode],
   );
 
-  const onEdgesChange = useCallback(
+  const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const removed = changes.filter((c) => c.type === "remove").map((c) => c.id);
+      onEdgesChange(changes);
+      const removed = changes
+        .filter((c): c is EdgeChange & { type: "remove"; id: string } => c.type === "remove")
+        .map((c) => c.id);
       if (removed.length === 0) return;
       onChange({
         ...flow,
@@ -247,7 +255,7 @@ export default function FlowChart({
         })),
       });
     },
-    [flow, onChange],
+    [onEdgesChange, flow, onChange],
   );
 
   const onNodesDelete = useCallback(
@@ -293,11 +301,12 @@ export default function FlowChart({
         <Plus className="w-4 h-4" /> Add Node
       </button>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={rfNodes}
+        edges={rfEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        onEdgesChange={handleEdgesChange}
+        onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
         onNodesDelete={onNodesDelete}
         fitView

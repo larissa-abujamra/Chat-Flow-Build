@@ -1,3 +1,3 @@
 - [Replit managed AI gpt-5](replit-managed-ai-gpt5.md) — gpt-5 chat calls reject `temperature` and use `max_completion_tokens`, not `max_tokens`.
 - [api-client-react imports](api-client-react-imports.md) — import generated hooks/types from the barrel, never the deep generated path (breaks type resolution).
-- [React Flow controlled graph](react-flow-controlled-graph.md) — derive nodes/edges from app state; persist drag positions via onNodesChange; mirror node-delete reference cleanup in every editor view.
+- [React Flow controlled graph](react-flow-controlled-graph.md) — use useNodesState + reconcile from app state (never rebuild node objects each render, breaks dragging); mirror node-delete reference cleanup in every editor view.
