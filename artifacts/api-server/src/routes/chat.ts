@@ -15,6 +15,7 @@ const router: IRouter = Router();
 const CATALOG_NODE_ID = "catalogo"; // real product/catalog lookup (Perplexity Sonar)
 const CNPJ_NODE_ID = "confirmaDados"; // BrasilAPI CNPJ enrichment (Sonar name-lookup fallback)
 const SITE_INSTAGRAM_NODE_ID = "confirmaInstagram"; // extract the Instagram handle from the site HTML
+const CNPJ_SITE_NODE_ID = "q_cnpj"; // try to read the CNPJ off the site HTML before asking the user
 
 interface Branch {
   id: string;
@@ -164,6 +165,42 @@ interface BrasilApiCnpj {
   uf?: string;
 }
 
+// Validate a CNPJ via its two check digits so we never present a random
+// 14-digit number scraped off a page as if it were the business's CNPJ.
+function isValidCnpj(value: string): boolean {
+  const cnpj = value.replace(/\D/g, "");
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+  const checkDigit = (len: number): number => {
+    let sum = 0;
+    let pos = len - 7;
+    for (let i = 0; i < len; i++) {
+      sum += Number(cnpj[i]) * pos;
+      pos = pos - 1 < 2 ? 9 : pos - 1;
+    }
+    const result = sum % 11;
+    return result < 2 ? 0 : 11 - result;
+  };
+  if (checkDigit(12) !== Number(cnpj[12])) return false;
+  return checkDigit(13) === Number(cnpj[13]);
+}
+
+// Find the first VALID CNPJ (formatted or bare) inside arbitrary text — used on
+// both the user's typed answer and on scraped site HTML.
+function extractCnpj(text: string): string | null {
+  const re = /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const digits = m[0].replace(/\D/g, "");
+    if (digits.length === 14 && isValidCnpj(digits)) return digits;
+  }
+  return null;
+}
+
+function formatCnpj(digits: string): string {
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+}
+
 // When the user types their CNPJ, look it up on the free, key-less BrasilAPI and
 // PREPEND a short factual summary (nome fantasia, setor, cidade) to the
 // confirmation question — so we confirm the data instead of asking field by
@@ -175,8 +212,10 @@ async function researchCnpj(
   latest: string,
   fallbackQuestion: string,
 ): Promise<string> {
-  const digits = latest.replace(/\D/g, "");
-  if (digits.length === 14) {
+  // The CNPJ may be in the user's latest message (they typed it) or already in
+  // the transcript (we found it on the site and the user just confirmed it).
+  const digits = extractCnpj(latest) ?? extractCnpj(transcript);
+  if (digits) {
     try {
       const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, {
         signal: AbortSignal.timeout(12000),
@@ -392,12 +431,74 @@ async function researchInstagramFromSite(
     if (!html) return fallbackQuestion;
     const handle = extractInstagramHandle(html);
     if (!handle) return fallbackQuestion;
-    return `Achei seu Instagram pelo site: @${handle} 🎉\n\nÉ esse mesmo? Se não for, é só me mandar o @ certo.`;
+    return `Achei seu Instagram pelo site: @${handle} 🎉\n\nQuer conectar seu Instagram para eu aprender seu jeito de falar? Uso suas DMs e legendas só para captar o tom.`;
   } catch (siteErr) {
     const e = siteErr as { message?: string; name?: string; code?: string };
     req.log.error(
       { message: e?.message, name: e?.name, code: e?.code },
       "Site fetch for Instagram failed; falling back to asking the handle",
+    );
+    return fallbackQuestion;
+  }
+}
+
+// Pick the business's website out of the conversation: the first user-typed
+// token that parses as a real public domain (has a dot and an alphabetic TLD).
+// Used to recover the site URL at the CNPJ step, where it is several messages
+// back in the transcript rather than in the latest message.
+function findUserSiteUrl(messages: { role: string; content: string }[]): URL | null {
+  for (const m of messages) {
+    if (m.role !== "user") continue;
+    for (const rawToken of m.content.split(/\s+/)) {
+      // Strip surrounding punctuation so "loja.com.br!" or "(loja.com)" parse.
+      const token = rawToken.replace(/^[([{<"']+/, "").replace(/[)\]}>"'.,;:!?]+$/, "");
+      if (!token) continue;
+      // Skip email addresses (onboarding asks for teammate emails): a token with
+      // an "@" before any "/" is an email, not a website — `new URL()` would
+      // otherwise treat the local part as userinfo and the domain as the host.
+      if (/^[^/]*@/.test(token)) continue;
+      const url = normalizeSiteUrl(token);
+      if (!url) continue;
+      // Reject anything that carried userinfo (e.g. user:pass@host) — not a site.
+      if (url.username || url.password) continue;
+      const host = url.hostname.toLowerCase();
+      // Skip social/aggregator hosts — these are not the business's own site.
+      if (
+        /(^|\.)(instagram|facebook|fb|twitter|x|tiktok|linkedin|youtube|wa|whatsapp|t)\.(com|me|co|net)$/.test(
+          host,
+        )
+      ) {
+        continue;
+      }
+      const labels = host.split(".");
+      const tld = labels[labels.length - 1];
+      if (labels.length >= 2 && /^[a-z]{2,}$/i.test(tld)) return url;
+    }
+  }
+  return null;
+}
+
+// Before asking the user for their CNPJ, try to read it off their own website
+// (the URL they gave at the site step, recovered from the transcript). On
+// success, present it for confirmation; on any failure degrade to just asking.
+async function researchCnpjFromSite(
+  req: Request,
+  messages: { role: string; content: string }[],
+  fallbackQuestion: string,
+): Promise<string> {
+  const url = findUserSiteUrl(messages);
+  if (!url) return fallbackQuestion;
+  try {
+    const html = await fetchSiteHtmlSafely(req, url);
+    if (!html) return fallbackQuestion;
+    const cnpj = extractCnpj(html);
+    if (!cnpj) return fallbackQuestion;
+    return `Encontrei o CNPJ da sua empresa pelo site: ${formatCnpj(cnpj)} 🎉\n\nÉ esse mesmo? Se não for, é só me mandar o número certo.`;
+  } catch (siteErr) {
+    const e = siteErr as { message?: string; name?: string; code?: string };
+    req.log.error(
+      { message: e?.message, name: e?.name, code: e?.code },
+      "Site fetch for CNPJ failed; falling back to asking for it",
     );
     return fallbackQuestion;
   }
@@ -605,6 +706,8 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       reply = await researchCatalog(req, transcript, lastUser.content, target.question);
     } else if (target.id === CNPJ_NODE_ID) {
       reply = await researchCnpj(req, transcript, lastUser.content, target.question);
+    } else if (target.id === CNPJ_SITE_NODE_ID) {
+      reply = await researchCnpjFromSite(req, messages, target.question);
     } else if (target.id === SITE_INSTAGRAM_NODE_ID) {
       reply = await researchInstagramFromSite(req, lastUser.content, target.question);
     }
