@@ -22,11 +22,11 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
 
 ## Where things live
 
-- DB schema (source of truth): `lib/db/src/schema/flows.ts` — single `flows` table, one persistent row id=`"default"`.
+- DB schema (source of truth): `lib/db/src/schema/flows.ts` — `flows` table (one persistent live row id=`"default"`) + `flow_versions` table (snapshot history, uuid id, name, startNodeId, nodes, createdAt, updatedAt).
 - API contract (source of truth): `lib/api-spec` OpenAPI spec → `pnpm --filter @workspace/api-spec run codegen` generates React Query hooks + Zod schemas into `@workspace/api-client-react`.
-- Backend routes: `artifacts/api-server/src/routes/flow.ts` (GET/PUT `/flow`), `artifacts/api-server/src/routes/chat.ts` (POST `/chat`).
+- Backend routes: `artifacts/api-server/src/routes/flow.ts` (GET/PUT `/flow`), `artifacts/api-server/src/routes/versions.ts` (GET/POST `/versions`, PATCH/DELETE `/versions/{id}`), `artifacts/api-server/src/routes/chat.ts` (POST `/chat`).
 - LLM client: `artifacts/api-server/src/lib/openai.ts` (Replit-managed AI).
-- Frontend: `artifacts/flow-builder/src/pages/home.tsx`, `components/flow-editor.tsx`, `components/chat-preview.tsx`.
+- Frontend: `artifacts/flow-builder/src/pages/home.tsx`, `components/flow-editor.tsx`, `components/chat-preview.tsx`, `components/version-history.tsx`.
 
 ## Architecture decisions
 
@@ -44,7 +44,8 @@ An editable conversation-flow wireframe: author a tree of question nodes (each a
 - Two editing views toggled in the header: **List** and **Flow Chart**, both editing the same live flow.
   - **Flow Chart** (draggable node graph, React Flow / `@xyflow/react`): each node edits its question and answers inline (answer text input + target dropdown + delete, plus "Add answer"). Drag boxes to reposition (persisted via the optional `position` field on each node), drag from a node's bottom handle to another node to create a branch, and delete edges/nodes to remove branches/nodes.
   - **List**: a scrollable column of node cards; each card edits the question, sets/marks the Start node, deletes the node, and edits branches (label input + target dropdown + delete, plus "Add Branch").
-- Save the flow to persist it.
+- Save the flow to persist it. Each "Save Flow" both updates the live `default` flow AND appends a version snapshot to history (server auto-names "Flow Chart vN" when no name is supplied).
+- Version history: a **History** button in the editor header opens a Sheet listing all version snapshots (newest first). Each entry supports inline rename, **Load** (sets the editor's live flow to that snapshot — does NOT auto-persist; save to make it live), and **Delete** (with an AlertDialog confirm). Component: `components/version-history.tsx`.
 - Shareable preview: the `/preview` route (`pages/share.tsx`) renders ONLY the chat (the saved `default` flow, fetched via `useGetFlow`) inside a phone mockup frame — no editor. Share this link to demo the chatbot. Client-side route registered in `App.tsx`; production static serve already rewrites `/* → /index.html` so deep-linking works when published.
 - Multi-bubble replies: put a line containing only `---` in a node's question text to split that reply into several messages. The chat preview sends each chunk as a separate bubble, one after another, with a short typing pause between (scaled to chunk length) so it reads like a human typing. Splitting is client-side in `chat-preview.tsx` (`splitIntoBubbles` / `revealReply`); the server contract is unchanged. No marker = one bubble (unchanged behavior).
 - Live chat preview: type answers, a real LLM matches each answer to a branch and advances; non-matching answers re-ask; conversation ends at leaf/end nodes. As the chat advances, the current question node is highlighted with a green (waz) outline in both Flow Chart and List views (wired via `currentNodeId` → `onActiveNodeChange` → `activeNodeId` → node `isActive`).

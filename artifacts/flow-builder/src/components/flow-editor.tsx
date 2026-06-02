@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FlowInput, FlowNode, FlowBranch, useUpdateFlow, getGetFlowQueryKey } from "@workspace/api-client-react";
+import { FlowInput, FlowNode, FlowBranch, useUpdateFlow, useCreateFlowVersion, getGetFlowQueryKey, getListFlowVersionsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Plus, Trash2, Save, Flag, CheckCircle2, List, Workflow, Download } from
 import { useToast } from "@/hooks/use-toast";
 import FlowChart from "@/components/flow-chart";
 import BranchColorBadge from "@/components/branch-color-badge";
+import VersionHistory from "@/components/version-history";
 
 export default function FlowEditor({
   flow,
@@ -20,6 +21,7 @@ export default function FlowEditor({
   activeNodeId: string | null;
 }) {
   const updateFlow = useUpdateFlow();
+  const createVersion = useCreateFlowVersion();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [view, setView] = useState<"list" | "chart">("chart");
@@ -94,8 +96,19 @@ export default function FlowEditor({
   const handleSave = () => {
     updateFlow.mutate({ data: flow }, {
       onSuccess: () => {
-        toast({ title: "Flow saved successfully" });
         queryClient.invalidateQueries({ queryKey: getGetFlowQueryKey() });
+        createVersion.mutate(
+          { data: { startNodeId: flow.startNodeId, nodes: flow.nodes } },
+          {
+            onSuccess: (version) => {
+              toast({ title: `Saved as "${version.name}"` });
+              queryClient.invalidateQueries({ queryKey: getListFlowVersionsQueryKey() });
+            },
+            onError: () => {
+              toast({ title: "Flow saved, but version snapshot failed", variant: "destructive" });
+            },
+          },
+        );
       },
       onError: () => {
         toast({ title: "Failed to save flow", variant: "destructive" });
@@ -145,10 +158,11 @@ export default function FlowEditor({
               <Workflow className="w-4 h-4" /> Flow Chart
             </button>
           </div>
+          <VersionHistory onLoad={onChange} />
           <Button variant="outline" onClick={handleExport} className="gap-2">
             <Download className="w-4 h-4" /> Export Flow
           </Button>
-          <Button onClick={handleSave} disabled={updateFlow.isPending} className="gap-2">
+          <Button onClick={handleSave} disabled={updateFlow.isPending || createVersion.isPending} className="gap-2">
             <Save className="w-4 h-4" /> Save Flow
           </Button>
         </div>

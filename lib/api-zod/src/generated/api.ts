@@ -88,6 +88,101 @@ export const UpdateFlowResponse = zod.object({
 
 
 /**
+ * Returns all saved flow version snapshots, newest first.
+ * @summary List saved flow versions
+ */
+export const ListFlowVersionsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "startNodeId": zod.string().nullable(),
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "question": zod.string(),
+  "branches": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
+})),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListFlowVersionsResponse = zod.array(ListFlowVersionsResponseItem)
+
+
+/**
+ * Saves a snapshot of the flow as a new version. If no name is provided, the server assigns an auto-incrementing default name ("Flow Chart vN").
+
+ * @summary Create a flow version snapshot
+ */
+export const CreateFlowVersionBody = zod.object({
+  "name": zod.string().optional(),
+  "startNodeId": zod.string().nullable(),
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "question": zod.string(),
+  "branches": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
+}))
+})
+
+
+/**
+ * @summary Rename a flow version
+ */
+export const RenameFlowVersionParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RenameFlowVersionBody = zod.object({
+  "name": zod.string()
+})
+
+export const RenameFlowVersionResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "startNodeId": zod.string().nullable(),
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "question": zod.string(),
+  "branches": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "targetNodeId": zod.string().nullable(),
+  "color": zod.string().nullish()
+})),
+  "position": zod.object({
+  "x": zod.number(),
+  "y": zod.number()
+}).optional()
+})),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a flow version
+ */
+export const DeleteFlowVersionParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
  * Given the current flow, conversation history, and current node, uses an LLM to interpret the latest answer, route to the matching branch, and return the next message.
 
  * @summary Advance the chat preview

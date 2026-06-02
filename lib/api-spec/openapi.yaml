@@ -58,6 +58,82 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Flow"
+  /versions:
+    get:
+      operationId: listFlowVersions
+      tags: [flow]
+      summary: List saved flow versions
+      description: Returns all saved flow version snapshots, newest first.
+      responses:
+        "200":
+          description: The saved flow versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowVersion"
+    post:
+      operationId: createFlowVersion
+      tags: [flow]
+      summary: Create a flow version snapshot
+      description: >
+        Saves a snapshot of the flow as a new version. If no name is provided,
+        the server assigns an auto-incrementing default name ("Flow Chart vN").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlowVersionInput"
+      responses:
+        "201":
+          description: The created flow version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowVersion"
+  /versions/{id}:
+    patch:
+      operationId: renameFlowVersion
+      tags: [flow]
+      summary: Rename a flow version
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFlowVersionInput"
+      responses:
+        "200":
+          description: The updated flow version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowVersion"
+        "404":
+          description: Version not found
+    delete:
+      operationId: deleteFlowVersion
+      tags: [flow]
+      summary: Delete a flow version
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Version deleted
+        "404":
+          description: Version not found
   /chat:
     post:
       operationId: sendChat
@@ -149,6 +225,42 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowNode"
+    FlowVersion:
+      type: object
+      required: [id, name, startNodeId, nodes, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        startNodeId:
+          type: ["string", "null"]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowNode"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreateFlowVersionInput:
+      type: object
+      required: [startNodeId, nodes]
+      properties:
+        name:
+          type: string
+        startNodeId:
+          type: ["string", "null"]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowNode"
+    UpdateFlowVersionInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
     ChatMessage:
       type: object
       required: [role, content]

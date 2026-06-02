@@ -46,6 +46,27 @@ export interface FlowInput {
   nodes: FlowNode[];
 }
 
+export interface FlowVersion {
+  id: string;
+  name: string;
+  /** @nullable */
+  startNodeId: string | null;
+  nodes: FlowNode[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFlowVersionInput {
+  name?: string;
+  /** @nullable */
+  startNodeId: string | null;
+  nodes: FlowNode[];
+}
+
+export interface UpdateFlowVersionInput {
+  name: string;
+}
+
 export type ChatMessageRole = typeof ChatMessageRole[keyof typeof ChatMessageRole];
 
 

@@ -22,9 +22,12 @@ import type {
 import type {
   ChatInput,
   ChatResult,
+  CreateFlowVersionInput,
   Flow,
   FlowInput,
-  HealthStatus
+  FlowVersion,
+  HealthStatus,
+  UpdateFlowVersionInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -264,6 +267,299 @@ export const useUpdateFlow = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateFlowMutationOptions(options));
+    }
+
+export const getListFlowVersionsUrl = () => {
+
+
+
+
+  return `/api/versions`
+}
+
+/**
+ * Returns all saved flow version snapshots, newest first.
+ * @summary List saved flow versions
+ */
+export const listFlowVersions = async ( options?: RequestInit): Promise<FlowVersion[]> => {
+
+  return customFetch<FlowVersion[]>(getListFlowVersionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFlowVersionsQueryKey = () => {
+    return [
+    `/api/versions`
+    ] as const;
+    }
+
+
+export const getListFlowVersionsQueryOptions = <TData = Awaited<ReturnType<typeof listFlowVersions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowVersions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFlowVersionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlowVersions>>> = ({ signal }) => listFlowVersions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFlowVersions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFlowVersionsQueryResult = NonNullable<Awaited<ReturnType<typeof listFlowVersions>>>
+export type ListFlowVersionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List saved flow versions
+ */
+
+export function useListFlowVersions<TData = Awaited<ReturnType<typeof listFlowVersions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowVersions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFlowVersionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateFlowVersionUrl = () => {
+
+
+
+
+  return `/api/versions`
+}
+
+/**
+ * Saves a snapshot of the flow as a new version. If no name is provided, the server assigns an auto-incrementing default name ("Flow Chart vN").
+
+ * @summary Create a flow version snapshot
+ */
+export const createFlowVersion = async (createFlowVersionInput: CreateFlowVersionInput, options?: RequestInit): Promise<FlowVersion> => {
+
+  return customFetch<FlowVersion>(getCreateFlowVersionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createFlowVersionInput,)
+  }
+);}
+
+
+
+
+export const getCreateFlowVersionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFlowVersion>>, TError,{data: BodyType<CreateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createFlowVersion>>, TError,{data: BodyType<CreateFlowVersionInput>}, TContext> => {
+
+const mutationKey = ['createFlowVersion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createFlowVersion>>, {data: BodyType<CreateFlowVersionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createFlowVersion(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateFlowVersionMutationResult = NonNullable<Awaited<ReturnType<typeof createFlowVersion>>>
+    export type CreateFlowVersionMutationBody = BodyType<CreateFlowVersionInput>
+    export type CreateFlowVersionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a flow version snapshot
+ */
+export const useCreateFlowVersion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFlowVersion>>, TError,{data: BodyType<CreateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createFlowVersion>>,
+        TError,
+        {data: BodyType<CreateFlowVersionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateFlowVersionMutationOptions(options));
+    }
+
+export const getRenameFlowVersionUrl = (id: string,) => {
+
+
+
+
+  return `/api/versions/${id}`
+}
+
+/**
+ * @summary Rename a flow version
+ */
+export const renameFlowVersion = async (id: string,
+    updateFlowVersionInput: UpdateFlowVersionInput, options?: RequestInit): Promise<FlowVersion> => {
+
+  return customFetch<FlowVersion>(getRenameFlowVersionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateFlowVersionInput,)
+  }
+);}
+
+
+
+
+export const getRenameFlowVersionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof renameFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext> => {
+
+const mutationKey = ['renameFlowVersion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameFlowVersion>>, {id: string;data: BodyType<UpdateFlowVersionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  renameFlowVersion(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenameFlowVersionMutationResult = NonNullable<Awaited<ReturnType<typeof renameFlowVersion>>>
+    export type RenameFlowVersionMutationBody = BodyType<UpdateFlowVersionInput>
+    export type RenameFlowVersionMutationError = ErrorType<void>
+
+    /**
+ * @summary Rename a flow version
+ */
+export const useRenameFlowVersion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof renameFlowVersion>>,
+        TError,
+        {id: string;data: BodyType<UpdateFlowVersionInput>},
+        TContext
+      > => {
+      return useMutation(getRenameFlowVersionMutationOptions(options));
+    }
+
+export const getDeleteFlowVersionUrl = (id: string,) => {
+
+
+
+
+  return `/api/versions/${id}`
+}
+
+/**
+ * @summary Delete a flow version
+ */
+export const deleteFlowVersion = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteFlowVersionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteFlowVersionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFlowVersion>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteFlowVersion>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteFlowVersion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFlowVersion>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteFlowVersion(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteFlowVersionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFlowVersion>>>
+
+    export type DeleteFlowVersionMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a flow version
+ */
+export const useDeleteFlowVersion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFlowVersion>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteFlowVersion>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteFlowVersionMutationOptions(options));
     }
 
 export const getSendChatUrl = () => {
