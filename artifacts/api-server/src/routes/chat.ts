@@ -1,15 +1,17 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { SendChatBody, SendChatResponse } from "@workspace/api-zod";
 import { openai } from "../lib/openai";
 import { getOpenRouter, SONAR_SEARCH_MODEL } from "../lib/openrouter";
 
 const router: IRouter = Router();
 
-// A node with this id triggers a web research step: when the conversation
-// advances INTO it, the server uses Perplexity Sonar to look up preliminary
-// public info about the company (from the onboarding transcript) and prepends
-// that summary to the node's reply. Flow advancement is unchanged otherwise.
-const RESEARCH_NODE_ID = "companyResearch";
+// Nodes with these ids trigger a live web-research step: when the conversation
+// advances INTO one, the server uses Perplexity Sonar to look up real public
+// info (from the onboarding transcript — which includes the company website and
+// Instagram) and PREPENDS it to the node's reply. Flow advancement is unchanged.
+// These are id-based conventions so they survive UI edits.
+const RESEARCH_NODE_ID = "companyResearch"; // preliminary company summary
+const CATALOG_NODE_ID = "catalogo"; // real product/catalog lookup
 
 interface Branch {
   id: string;
@@ -20,6 +22,104 @@ interface Node {
   id: string;
   question: string;
   branches: Branch[];
+}
+
+// The company summary must be statements only. Drop any trailing question
+// paragraphs the model may add (e.g. asking the user about their goals/focus)
+// so the research step never asks the user anything.
+function stripTrailingQuestions(text: string): string {
+  const paras = text
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  while (paras.length && paras[paras.length - 1].endsWith("?")) paras.pop();
+  return paras.join("\n\n").trim();
+}
+
+// Look up preliminary public info about the company and prepend a short,
+// statements-only summary to the node's question. Degrades to just the question.
+async function researchCompany(
+  req: Request,
+  transcript: string,
+  latest: string,
+  fallbackQuestion: string,
+): Promise<string> {
+  const openrouter = getOpenRouter();
+  if (!openrouter) return fallbackQuestion;
+  try {
+    const research = await openrouter.chat.completions.create(
+      {
+        model: SONAR_SEARCH_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "During an onboarding chat the user gave their business name, tax id (CNPJ), website, Instagram and sector. Using the conversation below, search the web for preliminary public info about this company (what it does, online presence, size). Reply in the SAME language as the conversation, briefly (2-3 sentences), starting with a short lead-in equivalent to 'I took a quick look at your company:'. IMPORTANT: state findings only — do NOT ask the user any questions, do NOT suggest goals, focus areas, priorities or next steps, and do NOT end with a question. Do not invent data — if you can't find it, say you'll dig deeper later. Do not include links or citation markers.",
+          },
+          {
+            role: "user",
+            content: `Conversa de onboarding até aqui:\n${transcript}\nUsuário: ${latest}`,
+          },
+        ],
+      },
+      { timeout: 25000 },
+    );
+    const summary = stripTrailingQuestions(
+      research.choices[0]?.message?.content?.trim() ?? "",
+    );
+    return summary ? `${summary}\n\n${fallbackQuestion}` : fallbackQuestion;
+  } catch (researchErr) {
+    const e = researchErr as { message?: string; status?: number; code?: string };
+    req.log.error(
+      { message: e?.message, status: e?.status, code: e?.code },
+      "Company research failed; continuing without summary",
+    );
+    return fallbackQuestion;
+  }
+}
+
+// Search the company's real website + Instagram for the products/services it
+// actually sells and prepend a bullet list to the node's question. If nothing
+// real is found, say so honestly instead of inventing a catalog.
+async function researchCatalog(
+  req: Request,
+  transcript: string,
+  latest: string,
+  fallbackQuestion: string,
+): Promise<string> {
+  const openrouter = getOpenRouter();
+  if (!openrouter) return fallbackQuestion;
+  try {
+    const search = await openrouter.chat.completions.create(
+      {
+        model: SONAR_SEARCH_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              'You are onboarding a business. From the onboarding conversation you have the company\'s website and Instagram handle. Search the web — specifically the company\'s OWN website and Instagram — for the REAL products or services this business actually sells, with prices when shown. Reply in the SAME language as the conversation. Output format: first a single short lead-in line equivalent to "I looked at your website and Instagram and found these products:", then a bullet list, one product per line, formatted as "- <product name> — <price, or the local-language equivalent of \\"price to confirm\\" when no price is shown>". List only real products you actually find (max 6). Do NOT invent products, do NOT ask the user any questions, and do NOT include links or citation markers. If you cannot find any real products, reply with exactly: NO_PRODUCTS',
+          },
+          {
+            role: "user",
+            content: `Conversa de onboarding até aqui:\n${transcript}\nUsuário: ${latest}`,
+          },
+        ],
+      },
+      { timeout: 25000 },
+    );
+    const list = search.choices[0]?.message?.content?.trim() ?? "";
+    if (!list || /no_products/i.test(list)) {
+      return `Dei uma olhada no seu site e no seu Instagram, mas ainda não consegui montar seu catálogo automaticamente — você poderá cadastrar e ajustar seus produtos no painel.\n\n${fallbackQuestion}`;
+    }
+    return `${list}\n\n${fallbackQuestion}`;
+  } catch (catalogErr) {
+    const e = catalogErr as { message?: string; status?: number; code?: string };
+    req.log.error(
+      { message: e?.message, status: e?.status, code: e?.code },
+      "Catalog research failed; continuing without product list",
+    );
+    return fallbackQuestion;
+  }
 }
 
 router.post("/chat", async (req, res) => {
@@ -217,40 +317,13 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       return;
     }
 
-    // Entering the research node: look up preliminary company info on the web
-    // (Perplexity Sonar) using everything collected so far, then continue.
+    // Entering a research-convention node: augment its reply with a live web
+    // lookup (company summary / real product catalog) before continuing.
     let reply = forcedAdvance ? target.question : (result.reply ?? target.question);
     if (target.id === RESEARCH_NODE_ID) {
-      const openrouter = getOpenRouter();
-      if (openrouter) {
-        try {
-          const research = await openrouter.chat.completions.create(
-            {
-              model: SONAR_SEARCH_MODEL,
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "During an onboarding chat the user gave their business name, tax id (CNPJ), website, Instagram and sector. Using the conversation below, search the web for preliminary public info about this company (what it does, main products/services, online presence, size). Reply in the SAME language as the conversation, briefly (2-4 sentences), starting with a short lead-in equivalent to 'I took a quick look at your company:'. Do not invent data — if you can't find it, say you'll dig deeper later. Do not include links or citation markers.",
-                },
-                {
-                  role: "user",
-                  content: `Conversa de onboarding até aqui:\n${transcript}\nUsuário: ${lastUser.content}`,
-                },
-              ],
-            },
-            { timeout: 25000 },
-          );
-          const summary = research.choices[0]?.message?.content?.trim();
-          if (summary) reply = `${summary}\n\n${target.question}`;
-        } catch (researchErr) {
-          const e = researchErr as { message?: string; status?: number; code?: string };
-          req.log.error(
-            { message: e?.message, status: e?.status, code: e?.code },
-            "Company research failed; continuing without summary",
-          );
-        }
-      }
+      reply = await researchCompany(req, transcript, lastUser.content, target.question);
+    } else if (target.id === CATALOG_NODE_ID) {
+      reply = await researchCatalog(req, transcript, lastUser.content, target.question);
     }
 
     res.json(
