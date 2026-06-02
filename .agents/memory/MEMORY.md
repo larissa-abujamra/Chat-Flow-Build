@@ -1,1 +1,1 @@
-- [Live research nodes are non-deterministic](live-research-nondeterminism.md) — Sonar business/catalog lookups vary run-to-run; same brand may show products once and the honest fallback next. Don't treat an empty catalog as a bug.
+- [Node fetch User-Agent blocks](node-fetch-user-agent-blocks.md) — Node global fetch sends `user-agent: node`; some APIs (BrasilAPI) & sites 403 it — send a browser UA, verify from the server not the notebook.

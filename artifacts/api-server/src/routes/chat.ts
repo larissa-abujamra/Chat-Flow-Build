@@ -1,4 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
+import net from "node:net";
+import dns from "node:dns/promises";
 import { SendChatBody, SendChatResponse } from "@workspace/api-zod";
 import { openai } from "../lib/openai";
 import { getOpenRouter, SONAR_SEARCH_MODEL } from "../lib/openrouter";
@@ -10,8 +12,9 @@ const router: IRouter = Router();
 // information about the business (never invented) and folds it into the node's
 // reply. This is an id-based convention so it survives UI edits. Flow
 // advancement itself is unchanged.
-const CATALOG_NODE_ID = "catalogo"; // real product/catalog lookup
-const BUSINESS_NODE_ID = "confirmaNegocio"; // real business identification by name
+const CATALOG_NODE_ID = "catalogo"; // real product/catalog lookup (Perplexity Sonar)
+const CNPJ_NODE_ID = "confirmaDados"; // BrasilAPI CNPJ enrichment (Sonar name-lookup fallback)
+const SITE_INSTAGRAM_NODE_ID = "confirmaInstagram"; // extract the Instagram handle from the site HTML
 
 interface Branch {
   id: string;
@@ -140,6 +143,254 @@ async function researchCatalog(
       "Catalog research failed; continuing without product list",
     );
     return question;
+  }
+}
+
+// Shape of the BrasilAPI CNPJ response fields we use.
+interface BrasilApiCnpj {
+  razao_social?: string;
+  nome_fantasia?: string;
+  cnae_fiscal_descricao?: string;
+  municipio?: string;
+  uf?: string;
+}
+
+// When the user types their CNPJ, look it up on the free, key-less BrasilAPI and
+// PREPEND a short factual summary (nome fantasia, setor, cidade) to the
+// confirmation question — so we confirm the data instead of asking field by
+// field. Invalid CNPJ or any API failure degrades to the name-based Sonar
+// research (researchBusiness), which itself degrades to just the node question.
+async function researchCnpj(
+  req: Request,
+  transcript: string,
+  latest: string,
+  fallbackQuestion: string,
+): Promise<string> {
+  const digits = latest.replace(/\D/g, "");
+  if (digits.length === 14) {
+    try {
+      const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, {
+        signal: AbortSignal.timeout(12000),
+        // BrasilAPI 403s the default Node "user-agent: node" — send a browser-like UA.
+        headers: {
+          accept: "application/json",
+          "user-agent":
+            "Mozilla/5.0 (compatible; SquadOnboardingBot/1.0; +https://squad.app)",
+        },
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as BrasilApiCnpj;
+        const nome = (data.nome_fantasia || data.razao_social || "").trim();
+        const setor = (data.cnae_fiscal_descricao || "").trim();
+        const cidade = [data.municipio, data.uf].filter(Boolean).join(" - ").trim();
+        const lines: string[] = [];
+        if (nome) lines.push(`📛 Nome: ${nome}`);
+        if (setor) lines.push(`🏷️ Setor: ${setor}`);
+        if (cidade) lines.push(`📍 Cidade: ${cidade}`);
+        if (lines.length > 0) {
+          return `Encontrei o cadastro do seu CNPJ! 🎉\n\n${lines.join("\n")}\n\n${fallbackQuestion}`;
+        }
+      } else {
+        req.log.warn({ status: resp.status }, "BrasilAPI CNPJ lookup returned non-OK");
+      }
+    } catch (cnpjErr) {
+      const e = cnpjErr as { message?: string; name?: string; code?: string };
+      req.log.error(
+        { message: e?.message, name: e?.name, code: e?.code },
+        "BrasilAPI CNPJ lookup failed; falling back to name-based research",
+      );
+    }
+  }
+  // Invalid/absent CNPJ or API failure: fall back to identifying the business by
+  // the name already in the transcript.
+  return researchBusiness(req, transcript, latest, fallbackQuestion);
+}
+
+// Reserved Instagram path segments that are never a user handle.
+const IG_RESERVED = new Set([
+  "p",
+  "reel",
+  "reels",
+  "explore",
+  "stories",
+  "tv",
+  "accounts",
+  "about",
+  "developer",
+  "developers",
+  "legal",
+  "directory",
+  "web",
+  "sharer",
+  "privacy",
+  "help",
+]);
+
+// Pull the first real Instagram handle out of a page's HTML, skipping content
+// URLs (/p/, /reel/, /explore/, /stories/, …) and reserved segments. Tolerates
+// JSON-escaped slashes (instagram.com\/handle), common in inline <script> data.
+function extractInstagramHandle(html: string): string | null {
+  const re = /instagram\.com\\?\/@?([A-Za-z0-9._]{1,30})/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const handle = m[1].replace(/\.$/, "").toLowerCase();
+    if (!handle || IG_RESERVED.has(handle)) continue;
+    return handle;
+  }
+  return null;
+}
+
+// Reject obviously non-public hosts (loopback, private ranges, link-local,
+// cloud metadata) before fetching a user-supplied URL server-side. Returns the
+// normalized URL or null. Protocol + literal-host checks only; the real
+// network-level SSRF protection (DNS resolution + per-redirect-hop IP
+// validation) lives in `hostResolvesToBlocked()` / `fetchSiteHtmlSafely()`.
+function normalizeSiteUrl(raw: string): URL | null {
+  let candidate = raw.trim();
+  if (!candidate) return null;
+  if (!/^https?:\/\//i.test(candidate)) candidate = `https://${candidate}`;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host === "metadata.google.internal"
+  ) {
+    return null;
+  }
+  return url;
+}
+
+// True if an IP literal points at a non-public range we must never fetch
+// server-side (loopback, private, link-local/metadata, CGNAT, ULA, multicast).
+// Handles IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) and zone ids. Anything that
+// isn't a parseable IP is treated as blocked (fail closed).
+function ipIsBlocked(ip: string): boolean {
+  let addr = ip.toLowerCase().trim();
+  const zone = addr.indexOf("%");
+  if (zone !== -1) addr = addr.slice(0, zone);
+  const mapped = addr.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mapped) addr = mapped[1];
+  const kind = net.isIP(addr);
+  if (kind === 4) {
+    const parts = addr.split(".").map(Number);
+    if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return true;
+    const [a, b] = parts;
+    if (a === 0) return true; // 0.0.0.0/8 "this host"
+    if (a === 10) return true; // private
+    if (a === 127) return true; // loopback
+    if (a === 169 && b === 254) return true; // link-local + cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 168) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true; // multicast / reserved
+    return false;
+  }
+  if (kind === 6) {
+    if (addr === "::1" || addr === "::") return true; // loopback / unspecified
+    if (addr.startsWith("fe80")) return true; // link-local
+    if (addr.startsWith("fc") || addr.startsWith("fd")) return true; // ULA
+    if (addr.startsWith("ff")) return true; // multicast
+    return false;
+  }
+  return true; // unparseable -> block
+}
+
+// Resolve the hostname and block if it is (or resolves to) a non-public IP.
+// IP literals are checked directly; hostnames are resolved (A + AAAA) and ALL
+// answers must be public. Resolution failure fails closed (blocked).
+async function hostResolvesToBlocked(hostname: string): Promise<boolean> {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (net.isIP(host)) return ipIsBlocked(host);
+  try {
+    const records = await dns.lookup(host, { all: true });
+    if (records.length === 0) return true;
+    return records.some((r) => ipIsBlocked(r.address));
+  } catch {
+    return true;
+  }
+}
+
+// Fetch a user-supplied site's HTML with redirects followed MANUALLY so every
+// hop is re-validated against the SSRF guard (a public URL can otherwise 30x to
+// an internal/private target). Returns the (capped) body or null on any
+// block/failure/non-HTML response.
+async function fetchSiteHtmlSafely(req: Request, startUrl: URL): Promise<string | null> {
+  let url = startUrl;
+  for (let hop = 0; hop < 5; hop++) {
+    if (await hostResolvesToBlocked(url.hostname)) {
+      req.log.warn({ host: url.hostname }, "Blocked SSRF target while fetching site");
+      return null;
+    }
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(12000),
+      redirect: "manual",
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (compatible; SquadOnboardingBot/1.0; +https://squad.app)",
+        accept: "text/html,application/xhtml+xml",
+      },
+    });
+    if (resp.status >= 300 && resp.status < 400) {
+      const location = resp.headers.get("location");
+      if (!location) return null;
+      let next: URL;
+      try {
+        next = new URL(location, url);
+      } catch {
+        return null;
+      }
+      if (next.protocol !== "http:" && next.protocol !== "https:") return null;
+      url = next;
+      continue;
+    }
+    if (!resp.ok) {
+      req.log.warn({ status: resp.status }, "Site fetch for Instagram returned non-OK");
+      return null;
+    }
+    const contentType = resp.headers.get("content-type") ?? "";
+    if (!/text\/html|xml/i.test(contentType)) return null;
+    // Cap the body so a huge page can't blow up memory. Footer social links live
+    // near the END of the document, so keep a generous cap rather than a small
+    // head slice that would miss them.
+    const full = await resp.text();
+    return full.length > 3_000_000 ? full.slice(0, 3_000_000) : full;
+  }
+  req.log.warn("Too many redirects while fetching site for Instagram");
+  return null;
+}
+
+// The user gave us their website: fetch the HTML and extract the Instagram
+// handle so we can confirm it instead of asking. Any failure (bad URL,
+// unreachable/blocked site, no handle found) degrades to just asking for the
+// handle.
+async function researchInstagramFromSite(
+  req: Request,
+  latest: string,
+  fallbackQuestion: string,
+): Promise<string> {
+  const url = normalizeSiteUrl(latest);
+  if (!url) return fallbackQuestion;
+  try {
+    const html = await fetchSiteHtmlSafely(req, url);
+    if (!html) return fallbackQuestion;
+    const handle = extractInstagramHandle(html);
+    if (!handle) return fallbackQuestion;
+    return `Achei seu Instagram pelo site: @${handle} 🎉\n\nÉ esse mesmo? Se não for, é só me mandar o @ certo.`;
+  } catch (siteErr) {
+    const e = siteErr as { message?: string; name?: string; code?: string };
+    req.log.error(
+      { message: e?.message, name: e?.name, code: e?.code },
+      "Site fetch for Instagram failed; falling back to asking the handle",
+    );
+    return fallbackQuestion;
   }
 }
 
@@ -343,8 +594,10 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
     let reply = forcedAdvance ? displayQuestion(target) : (result.reply ?? displayQuestion(target));
     if (target.id === CATALOG_NODE_ID) {
       reply = await researchCatalog(req, transcript, lastUser.content, target.question);
-    } else if (target.id === BUSINESS_NODE_ID) {
-      reply = await researchBusiness(req, transcript, lastUser.content, target.question);
+    } else if (target.id === CNPJ_NODE_ID) {
+      reply = await researchCnpj(req, transcript, lastUser.content, target.question);
+    } else if (target.id === SITE_INSTAGRAM_NODE_ID) {
+      reply = await researchInstagramFromSite(req, lastUser.content, target.question);
     }
 
     res.json(
