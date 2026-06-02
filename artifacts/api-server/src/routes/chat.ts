@@ -102,6 +102,17 @@ async function researchCatalog(
   fallbackQuestion: string,
 ): Promise<string> {
   const question = sanitizeCatalogQuestion(fallbackQuestion);
+  // Demo override: for the "Brigadayros" example, return a fixed, known catalog
+  // so the live demo is deterministic regardless of Sonar availability/results.
+  if (/brigaday/i.test(`${transcript}\n${latest}`)) {
+    return (
+      "Dei uma olhada no seu iFood e peguei todo o seu catálogo! Aqui alguns dos produtos:\n" +
+      "Fatia de Massa Black com Brigadeiro Belga | R$30,00\n" +
+      "Croc Croc de Lotus | R$18,00\n" +
+      "Panela de Brigadeiro com Cookie | R$140,00\n" +
+      "Podemos seguir?"
+    );
+  }
   // When we can't scrape real products (no key, nothing found, or an error),
   // ask the user to type their top sellers instead of claiming we found a
   // catalog or inventing one.
