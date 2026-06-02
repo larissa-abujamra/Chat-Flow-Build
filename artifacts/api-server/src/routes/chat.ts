@@ -5,12 +5,13 @@ import { getOpenRouter, SONAR_SEARCH_MODEL } from "../lib/openrouter";
 
 const router: IRouter = Router();
 
-// A node with this id triggers a live web-research step: when the conversation
-// advances INTO it, the server uses Perplexity Sonar to look up the company's
-// REAL products (from the onboarding transcript — which includes the company
-// website and Instagram) and PREPENDS the list to the node's reply. This is an
-// id-based convention so it survives UI edits. Flow advancement is unchanged.
+// Nodes with these ids trigger a live web-research step: when the conversation
+// advances INTO one, the server uses Perplexity Sonar to look up REAL, public
+// information about the business (never invented) and folds it into the node's
+// reply. This is an id-based convention so it survives UI edits. Flow
+// advancement itself is unchanged.
 const CATALOG_NODE_ID = "catalogo"; // real product/catalog lookup
+const BUSINESS_NODE_ID = "confirmaNegocio"; // real business identification by name
 
 interface Branch {
   id: string;
@@ -43,9 +44,53 @@ function displayQuestion(node: { id: string; question: string }): string {
   return node.id === CATALOG_NODE_ID ? sanitizeCatalogQuestion(node.question) : node.question;
 }
 
-// Search the company's real website + Instagram for the products/services it
-// actually sells and prepend a bullet list to the node's question. If nothing
-// real is found, say so honestly instead of inventing a catalog.
+// Identify the business by the name the user just gave and fold a short, REAL
+// public description into the confirmation question. Never invents a business —
+// degrades to just the node's question when nothing is found or the key/search
+// is unavailable.
+async function researchBusiness(
+  req: Request,
+  transcript: string,
+  latest: string,
+  fallbackQuestion: string,
+): Promise<string> {
+  const openrouter = getOpenRouter();
+  if (!openrouter) return fallbackQuestion;
+  try {
+    const search = await openrouter.chat.completions.create(
+      {
+        model: SONAR_SEARCH_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              'You are onboarding a business. From the onboarding conversation you have the business name (and possibly its city/segment). Search the web for this REAL business and write ONE short line identifying it, formatted as "<Business Name> — <short description: what it sells / segment, and city if known>". Reply in the SAME language as the conversation. Do NOT ask any questions, do NOT add extra lines, and do NOT include links or citation markers. If you cannot confidently identify the business, reply with exactly: NO_INFO',
+          },
+          {
+            role: "user",
+            content: `Conversa de onboarding até aqui:\n${transcript}\nUsuário: ${latest}`,
+          },
+        ],
+      },
+      { timeout: 25000 },
+    );
+    const info = search.choices[0]?.message?.content?.trim() ?? "";
+    if (!info || /no_info/i.test(info)) return fallbackQuestion;
+    return `Perfeito! Dei uma olhada e encontrei:\n\n${info}\n\n${fallbackQuestion}`;
+  } catch (businessErr) {
+    const e = businessErr as { message?: string; status?: number; code?: string };
+    req.log.error(
+      { message: e?.message, status: e?.status, code: e?.code },
+      "Business research failed; continuing without company info",
+    );
+    return fallbackQuestion;
+  }
+}
+
+// Search the web for the products/services the business actually sells (by its
+// name, plus any site/Instagram in the transcript) and append a short list to
+// the node's question. If nothing real is found, say so honestly instead of
+// inventing a catalog.
 async function researchCatalog(
   req: Request,
   transcript: string,
@@ -63,7 +108,7 @@ async function researchCatalog(
           {
             role: "system",
             content:
-              'You are onboarding a business. From the onboarding conversation you have the company\'s website and Instagram handle. Search the web — specifically the company\'s OWN website and Instagram — for the REAL products or services this business actually sells, with prices when shown. Reply in the SAME language as the conversation. Output format: first a single short lead-in line equivalent to "I looked at your website and Instagram and found these products:", then a bullet list, one product per line, formatted as "- <product name> — <price, or the local-language equivalent of \\"price to confirm\\" when no price is shown>". List only real products you actually find (max 6). Do NOT invent products, do NOT ask the user any questions, and do NOT include links or citation markers. If you cannot find any real products, reply with exactly: NO_PRODUCTS',
+              'You are onboarding a business. From the onboarding conversation you have the business name (and possibly its website or Instagram). Search the web — the business\'s OWN website, Instagram, or delivery listings — for the REAL products it actually sells, with prices when shown. Reply in the SAME language as the conversation. Output ONLY a list of real products, one per line, formatted exactly as "<product name> | <price as R$XX,XX, or the local-language equivalent of \\"preço a confirmar\\" when no price is shown>". List at most 4 products. EVERY line MUST start with a real product name before the "|" — never output a line whose name is blank or is just the price placeholder. Do NOT pad the list to a fixed count: if you only confidently find 1 or 2 products, list only those. Do NOT add any lead-in line, bullets, questions, links, or citation markers. If you cannot find any real products, reply with exactly: NO_PRODUCTS',
           },
           {
             role: "user",
@@ -73,11 +118,21 @@ async function researchCatalog(
       },
       { timeout: 25000 },
     );
-    const list = search.choices[0]?.message?.content?.trim() ?? "";
-    if (!list || /no_products/i.test(list)) {
-      return `Dei uma olhada no seu site e no seu Instagram, mas ainda não consegui montar seu catálogo automaticamente — você poderá cadastrar e ajustar seus produtos no painel.\n\n${question}`;
+    const raw = search.choices[0]?.message?.content?.trim() ?? "";
+    // Keep only well-formed "<name> | <price>" lines with a real, non-placeholder
+    // product name, so the model can't pad the catalog with nameless filler.
+    const products = raw
+      .split("\n")
+      .map((l) => l.replace(/^[\s*\-•]+/, "").trim())
+      .filter((l) => {
+        const name = l.split("|")[0]?.trim() ?? "";
+        return l.includes("|") && name.length > 0 && !/^preço a confirmar$/i.test(name);
+      })
+      .slice(0, 4);
+    if (products.length === 0 || /no_products/i.test(raw)) {
+      return `${question}\n\nDei uma olhada mas ainda não consegui montar seu cardápio automaticamente — você poderá cadastrar e ajustar seus produtos no painel.`;
     }
-    return `${list}\n\n${question}`;
+    return `${question}\n\n${products.join("\n")}`;
   } catch (catalogErr) {
     const e = catalogErr as { message?: string; status?: number; code?: string };
     req.log.error(
@@ -161,7 +216,7 @@ router.post("/chat", async (req, res) => {
   const branchDescriptions = currentNode.branches.map((b) => {
     const target = b.targetNodeId ? nodeMap.get(b.targetNodeId) : null;
     const next = target
-      ? `next question: "${target.question}"`
+      ? `next question: "${displayQuestion(target)}"`
       : "ends the conversation";
     return `- id "${b.id}": answer means "${b.label}" -> ${next}`;
   });
@@ -171,7 +226,7 @@ router.post("/chat", async (req, res) => {
     .join("\n");
 
   const systemPrompt = `You are driving a branching conversational flow. The user is currently being asked this question:
-"${currentNode.question}"
+"${displayQuestion(currentNode)}"
 
 The possible answer branches are:
 ${branchDescriptions.join("\n")}
@@ -283,11 +338,13 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       return;
     }
 
-    // Entering the catalog node: augment its reply with a live web lookup of the
-    // company's real products before continuing.
-    let reply = forcedAdvance ? target.question : (result.reply ?? target.question);
+    // Entering a research node: augment its reply with a live web lookup before
+    // continuing (real public info only — never invented).
+    let reply = forcedAdvance ? displayQuestion(target) : (result.reply ?? displayQuestion(target));
     if (target.id === CATALOG_NODE_ID) {
       reply = await researchCatalog(req, transcript, lastUser.content, target.question);
+    } else if (target.id === BUSINESS_NODE_ID) {
+      reply = await researchBusiness(req, transcript, lastUser.content, target.question);
     }
 
     res.json(

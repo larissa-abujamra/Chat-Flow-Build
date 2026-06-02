@@ -1,2 +1,1 @@
-- [Deferred setState closures](deferred-setstate-closures.md) — React functional updaters must capture values into a const, never read a mutable index you advance after the setState call.
-- [Orval query hook queryKey](orval-query-hook-querykey.md) — passing a `query` options object to a generated useQuery hook requires an explicit `queryKey` (use `get<Name>QueryKey()`), even for just `enabled`.
+- [Live research nodes are non-deterministic](live-research-nondeterminism.md) — Sonar business/catalog lookups vary run-to-run; same brand may show products once and the honest fallback next. Don't treat an empty catalog as a bug.
