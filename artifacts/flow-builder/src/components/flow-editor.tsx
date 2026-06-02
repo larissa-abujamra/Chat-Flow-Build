@@ -5,8 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Save, Flag, CheckCircle2, List, Workflow, Download } from "lucide-react";
+import { Plus, Trash2, Save, Flag, CheckCircle2, List, Workflow, Download, FilePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import FlowChart from "@/components/flow-chart";
 import BranchColorBadge from "@/components/branch-color-badge";
 import VersionHistory from "@/components/version-history";
@@ -15,10 +26,12 @@ export default function FlowEditor({
   flow,
   onChange,
   activeNodeId,
+  onNewFlow,
 }: {
   flow: FlowInput;
   onChange: (f: FlowInput) => void;
   activeNodeId: string | null;
+  onNewFlow?: () => void;
 }) {
   const updateFlow = useUpdateFlow();
   const createVersion = useCreateFlowVersion();
@@ -116,6 +129,13 @@ export default function FlowEditor({
     });
   };
 
+  const handleNewFlow = () => {
+    onChange({ name: "Novo fluxo", startNodeId: null, nodes: [] });
+    setView("chart");
+    onNewFlow?.();
+    toast({ title: "Editor limpo — comece seu fluxo do zero. Salve para persistir." });
+  };
+
   const handleExport = () => {
     const json = JSON.stringify(flow, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -158,6 +178,27 @@ export default function FlowEditor({
               <Workflow className="w-4 h-4" /> Flow Chart
             </button>
           </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <FilePlus className="w-4 h-4" /> Novo fluxo
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Começar um fluxo do zero?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso limpa o editor e deixa o fluxo sem nenhum node, para você montar do
+                  zero. Suas alterações atuais não salvas serão descartadas — o fluxo salvo
+                  e as versões no histórico continuam intactos.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleNewFlow}>Começar do zero</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <VersionHistory onLoad={onChange} />
           <Button variant="outline" onClick={handleExport} className="gap-2">
             <Download className="w-4 h-4" /> Export Flow

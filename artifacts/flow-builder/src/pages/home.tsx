@@ -10,6 +10,12 @@ export default function Home() {
   const [liveFlow, setLiveFlow] = useState<FlowInput | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+
+  const handleNewFlow = () => {
+    setActiveNodeId(null);
+    setPreviewKey((k) => k + 1);
+  };
 
   useEffect(() => {
     if (serverFlow && !liveFlow) {
@@ -36,6 +42,7 @@ export default function Home() {
           flow={liveFlow} 
           onChange={setLiveFlow} 
           activeNodeId={activeNodeId} 
+          onNewFlow={handleNewFlow}
         />
         {previewCollapsed && (
           <button
@@ -51,6 +58,7 @@ export default function Home() {
       {!previewCollapsed && (
         <div className="w-full md:w-1/3 flex flex-col h-[50vh] md:h-screen bg-card">
           <ChatPreview 
+            key={previewKey}
             flow={liveFlow} 
             onActiveNodeChange={setActiveNodeId}
             onCollapse={() => setPreviewCollapsed(true)}
