@@ -1,4 +1,5 @@
 - [Node fetch User-Agent blocks](node-fetch-user-agent-blocks.md) — Node global fetch sends `user-agent: node`; some APIs (BrasilAPI) & sites 403 it — send a browser UA, verify from the server not the notebook.
+- [Flow PUT vs editor state](flow-edit-via-put-vs-editor.md) — server-side PUT /api/flow can silently revert when the open editor saves its stale copy; tell the user to reload. Chart auto-lays out from wiring.
 - [Live research nodes are non-deterministic](live-research-nondeterminism.md) — Sonar-backed CNPJ/business/catalog nodes give different output across identical runs; an empty result isn't a bug.
 - [Replit managed AI with gpt-5 models](replit-managed-ai-gpt5.md) — gpt-5 rejects `temperature`, needs `max_completion_tokens`; quirks of the Replit-managed OpenAI-compatible proxy.
 - [OpenRouter Sonar search](openrouter-sonar-search.md) — how/why Perplexity Sonar Pro Search is wired into the chat's off-script + research paths.
