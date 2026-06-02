@@ -101,8 +101,15 @@ async function researchCatalog(
   fallbackQuestion: string,
 ): Promise<string> {
   const question = sanitizeCatalogQuestion(fallbackQuestion);
+  // When we can't scrape real products (no key, nothing found, or an error),
+  // ask the user to type their top sellers instead of claiming we found a
+  // catalog or inventing one.
+  const askManualProducts =
+    "Não consegui encontrar seus produtos automaticamente. 😅\n\n" +
+    "Me conta os 3 produtos que você mais vende, com o preço de cada um? Pode mandar assim:\n\n" +
+    "Brigadeiro — R$ 5,00\nBolo de pote — R$ 15,00\nTorta — R$ 60,00";
   const openrouter = getOpenRouter();
-  if (!openrouter) return question;
+  if (!openrouter) return askManualProducts;
   try {
     const search = await openrouter.chat.completions.create(
       {
@@ -111,7 +118,7 @@ async function researchCatalog(
           {
             role: "system",
             content:
-              'You are onboarding a business. From the onboarding conversation you have the business name (and possibly its website or Instagram). Search the web — the business\'s OWN website, Instagram, or delivery listings — for the REAL products it actually sells, with prices when shown. Reply in the SAME language as the conversation. Output ONLY a list of real products, one per line, formatted exactly as "<product name> | <price as R$XX,XX, or the local-language equivalent of \\"preço a confirmar\\" when no price is shown>". List at most 4 products. EVERY line MUST start with a real product name before the "|" — never output a line whose name is blank or is just the price placeholder. Do NOT pad the list to a fixed count: if you only confidently find 1 or 2 products, list only those. Do NOT add any lead-in line, bullets, questions, links, or citation markers. If you cannot find any real products, reply with exactly: NO_PRODUCTS',
+              'You are onboarding a business. From the onboarding conversation you have the business name (and possibly its CNPJ-derived name/segment, website, or Instagram). Search the web — the business\'s OWN website, Instagram, or delivery listings (e.g. iFood, Rappi) — for the REAL products it actually sells, with prices when shown. Reply in the SAME language as the conversation. Output ONLY a list of real products, one per line, formatted exactly as "<product name> | <price as R$XX,XX, or the local-language equivalent of \\"preço a confirmar\\" when no price is shown>". List at most 4 products. EVERY line MUST start with a real product name before the "|" — never output a line whose name is blank or is just the price placeholder. Do NOT pad the list to a fixed count: if you only confidently find 1 or 2 products, list only those. Do NOT add any lead-in line, bullets, questions, links, or citation markers. If you cannot find any real products, reply with exactly: NO_PRODUCTS',
           },
           {
             role: "user",
@@ -132,17 +139,19 @@ async function researchCatalog(
         return l.includes("|") && name.length > 0 && !/^preço a confirmar$/i.test(name);
       })
       .slice(0, 4);
+    // Nothing real found: ask the user for their top sellers rather than
+    // claiming success with an empty list.
     if (products.length === 0 || /no_products/i.test(raw)) {
-      return `${question}\n\nDei uma olhada mas ainda não consegui montar seu cardápio automaticamente — você poderá cadastrar e ajustar seus produtos no painel.`;
+      return askManualProducts;
     }
     return `${question}\n\n${products.join("\n")}`;
   } catch (catalogErr) {
     const e = catalogErr as { message?: string; status?: number; code?: string };
     req.log.error(
       { message: e?.message, status: e?.status, code: e?.code },
-      "Catalog research failed; continuing without product list",
+      "Catalog research failed; asking the user to provide products manually",
     );
-    return question;
+    return askManualProducts;
   }
 }
 
