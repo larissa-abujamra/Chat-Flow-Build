@@ -3,7 +3,7 @@ import { FlowInput, ChatMessage, ChatResult, useSendChat } from "@workspace/api-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, RotateCcw, PanelRightClose, ExternalLink } from "lucide-react";
-import oddyAvatar from "@assets/image_1780407881420.png";
+import oddyAvatar from "@assets/image_1780408993323.png";
 
 // Last-resort client timeout. The server bounds its own LLM/search calls
 // (classifier 25s + research 25s worst case), so this only catches a truly
