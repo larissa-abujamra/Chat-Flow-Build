@@ -94,6 +94,7 @@ export const UpdateFlowResponse = zod.object({
 export const ListFlowVersionsResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
+  "notes": zod.string().nullable(),
   "startNodeId": zod.string().nullable(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
@@ -122,6 +123,7 @@ export const ListFlowVersionsResponse = zod.array(ListFlowVersionsResponseItem)
  */
 export const CreateFlowVersionBody = zod.object({
   "name": zod.string().optional(),
+  "notes": zod.string().nullish(),
   "startNodeId": zod.string().nullable(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
@@ -141,19 +143,21 @@ export const CreateFlowVersionBody = zod.object({
 
 
 /**
- * @summary Rename a flow version
+ * @summary Update a flow version (rename and/or notes)
  */
-export const RenameFlowVersionParams = zod.object({
+export const UpdateFlowVersionParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const RenameFlowVersionBody = zod.object({
-  "name": zod.string()
+export const UpdateFlowVersionBody = zod.object({
+  "name": zod.string().optional(),
+  "notes": zod.string().nullish()
 })
 
-export const RenameFlowVersionResponse = zod.object({
+export const UpdateFlowVersionResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
+  "notes": zod.string().nullable(),
   "startNodeId": zod.string().nullable(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),

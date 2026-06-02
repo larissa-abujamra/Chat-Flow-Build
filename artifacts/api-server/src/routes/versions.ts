@@ -4,7 +4,7 @@ import { db, flowVersionsTable, type FlowVersionRow } from "@workspace/db";
 import {
   ListFlowVersionsResponse,
   CreateFlowVersionBody,
-  RenameFlowVersionBody,
+  UpdateFlowVersionBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -13,6 +13,7 @@ function serialize(row: FlowVersionRow) {
   return {
     id: row.id,
     name: row.name,
+    notes: row.notes ?? null,
     startNodeId: row.startNodeId,
     nodes: row.nodes,
     createdAt: row.createdAt.toISOString(),
@@ -38,7 +39,7 @@ router.post("/versions", async (req, res) => {
     return;
   }
 
-  const { name, startNodeId, nodes } = parsed.data;
+  const { name, notes, startNodeId, nodes } = parsed.data;
 
   let finalName = name?.trim() ?? "";
   if (!finalName) {
@@ -50,9 +51,16 @@ router.post("/versions", async (req, res) => {
     finalName = `Flow Chart v${maxN + 1}`;
   }
 
+  const trimmedNotes = notes?.trim();
   const [row] = await db
     .insert(flowVersionsTable)
-    .values({ id: crypto.randomUUID(), name: finalName, startNodeId, nodes })
+    .values({
+      id: crypto.randomUUID(),
+      name: finalName,
+      notes: trimmedNotes ? trimmedNotes : null,
+      startNodeId,
+      nodes,
+    })
     .returning();
 
   req.log.info({ id: row.id, name: row.name }, "Created flow version");
@@ -60,21 +68,37 @@ router.post("/versions", async (req, res) => {
 });
 
 router.patch("/versions/:id", async (req, res) => {
-  const parsed = RenameFlowVersionBody.safeParse(req.body);
+  const parsed = UpdateFlowVersionBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid version", details: parsed.error.issues });
     return;
   }
 
-  const name = parsed.data.name.trim();
-  if (!name) {
-    res.status(400).json({ error: "Name cannot be empty" });
+  const { name, notes } = parsed.data;
+  const update: { name?: string; notes?: string | null } = {};
+
+  if (name !== undefined) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      res.status(400).json({ error: "Name cannot be empty" });
+      return;
+    }
+    update.name = trimmed;
+  }
+
+  if (notes !== undefined) {
+    const trimmed = notes?.trim();
+    update.notes = trimmed ? trimmed : null;
+  }
+
+  if (Object.keys(update).length === 0) {
+    res.status(400).json({ error: "Nothing to update" });
     return;
   }
 
   const [row] = await db
     .update(flowVersionsTable)
-    .set({ name })
+    .set(update)
     .where(eq(flowVersionsTable.id, req.params.id))
     .returning();
 

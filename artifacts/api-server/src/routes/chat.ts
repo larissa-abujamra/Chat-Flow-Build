@@ -5,12 +5,11 @@ import { getOpenRouter, SONAR_SEARCH_MODEL } from "../lib/openrouter";
 
 const router: IRouter = Router();
 
-// Nodes with these ids trigger a live web-research step: when the conversation
-// advances INTO one, the server uses Perplexity Sonar to look up real public
-// info (from the onboarding transcript — which includes the company website and
-// Instagram) and PREPENDS it to the node's reply. Flow advancement is unchanged.
-// These are id-based conventions so they survive UI edits.
-const RESEARCH_NODE_ID = "companyResearch"; // preliminary company summary
+// A node with this id triggers a live web-research step: when the conversation
+// advances INTO it, the server uses Perplexity Sonar to look up the company's
+// REAL products (from the onboarding transcript — which includes the company
+// website and Instagram) and PREPENDS the list to the node's reply. This is an
+// id-based convention so it survives UI edits. Flow advancement is unchanged.
 const CATALOG_NODE_ID = "catalogo"; // real product/catalog lookup
 
 interface Branch {
@@ -24,58 +23,24 @@ interface Node {
   branches: Branch[];
 }
 
-// The company summary must be statements only. Drop any trailing question
-// paragraphs the model may add (e.g. asking the user about their goals/focus)
-// so the research step never asks the user anything.
-function stripTrailingQuestions(text: string): string {
-  const paras = text
-    .split(/\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  while (paras.length && paras[paras.length - 1].endsWith("?")) paras.pop();
-  return paras.join("\n\n").trim();
+// The server now lists the REAL products it found, so the node's question should
+// only carry the confirmation. Strip leftover wireframe/mockup annotations
+// (e.g. "(mostro um card com 4 itens ...)") and a redundant "Achei esses
+// produtos seus." claim that older flow snapshots still embed in the node text.
+function sanitizeCatalogQuestion(q: string): string {
+  const cleaned = q
+    .replace(/\([^)]*\b(?:mostro|card)\b[^)]*\)/gi, "")
+    .replace(/achei esses produtos[^.?!]*[.?!]\s*/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  return cleaned || "Esse é o seu catálogo?";
 }
 
-// Look up preliminary public info about the company and prepend a short,
-// statements-only summary to the node's question. Degrades to just the question.
-async function researchCompany(
-  req: Request,
-  transcript: string,
-  latest: string,
-  fallbackQuestion: string,
-): Promise<string> {
-  const openrouter = getOpenRouter();
-  if (!openrouter) return fallbackQuestion;
-  try {
-    const research = await openrouter.chat.completions.create(
-      {
-        model: SONAR_SEARCH_MODEL,
-        messages: [
-          {
-            role: "system",
-            content:
-              "During an onboarding chat the user gave their business name, tax id (CNPJ), website, Instagram and sector. Using the conversation below, search the web for preliminary public info about this company (what it does, online presence, size). Reply in the SAME language as the conversation, briefly (2-3 sentences), starting with a short lead-in equivalent to 'I took a quick look at your company:'. IMPORTANT: state findings only — do NOT ask the user any questions, do NOT suggest goals, focus areas, priorities or next steps, and do NOT end with a question. Do not invent data — if you can't find it, say you'll dig deeper later. Do not include links or citation markers.",
-          },
-          {
-            role: "user",
-            content: `Conversa de onboarding até aqui:\n${transcript}\nUsuário: ${latest}`,
-          },
-        ],
-      },
-      { timeout: 25000 },
-    );
-    const summary = stripTrailingQuestions(
-      research.choices[0]?.message?.content?.trim() ?? "",
-    );
-    return summary ? `${summary}\n\n${fallbackQuestion}` : fallbackQuestion;
-  } catch (researchErr) {
-    const e = researchErr as { message?: string; status?: number; code?: string };
-    req.log.error(
-      { message: e?.message, status: e?.status, code: e?.code },
-      "Company research failed; continuing without summary",
-    );
-    return fallbackQuestion;
-  }
+// The question text a node should show the user. The catalog node still carries
+// leftover wireframe text in older flow snapshots, so strip it everywhere the
+// raw node question would otherwise be emitted (start, re-ask, no-input paths).
+function displayQuestion(node: { id: string; question: string }): string {
+  return node.id === CATALOG_NODE_ID ? sanitizeCatalogQuestion(node.question) : node.question;
 }
 
 // Search the company's real website + Instagram for the products/services it
@@ -87,8 +52,9 @@ async function researchCatalog(
   latest: string,
   fallbackQuestion: string,
 ): Promise<string> {
+  const question = sanitizeCatalogQuestion(fallbackQuestion);
   const openrouter = getOpenRouter();
-  if (!openrouter) return fallbackQuestion;
+  if (!openrouter) return question;
   try {
     const search = await openrouter.chat.completions.create(
       {
@@ -109,16 +75,16 @@ async function researchCatalog(
     );
     const list = search.choices[0]?.message?.content?.trim() ?? "";
     if (!list || /no_products/i.test(list)) {
-      return `Dei uma olhada no seu site e no seu Instagram, mas ainda não consegui montar seu catálogo automaticamente — você poderá cadastrar e ajustar seus produtos no painel.\n\n${fallbackQuestion}`;
+      return `Dei uma olhada no seu site e no seu Instagram, mas ainda não consegui montar seu catálogo automaticamente — você poderá cadastrar e ajustar seus produtos no painel.\n\n${question}`;
     }
-    return `${list}\n\n${fallbackQuestion}`;
+    return `${list}\n\n${question}`;
   } catch (catalogErr) {
     const e = catalogErr as { message?: string; status?: number; code?: string };
     req.log.error(
       { message: e?.message, status: e?.status, code: e?.code },
       "Catalog research failed; continuing without product list",
     );
-    return fallbackQuestion;
+    return question;
   }
 }
 
@@ -156,7 +122,7 @@ router.post("/chat", async (req, res) => {
     const startNode = nodeMap.get(flow.startNodeId)!;
     res.json(
       SendChatResponse.parse({
-        reply: startNode.question,
+        reply: displayQuestion(startNode),
         currentNodeId: startNode.id,
         matchedBranchId: null,
         done: startNode.branches.length === 0,
@@ -182,7 +148,7 @@ router.post("/chat", async (req, res) => {
   if (!lastUser) {
     res.json(
       SendChatResponse.parse({
-        reply: currentNode.question,
+        reply: displayQuestion(currentNode),
         currentNodeId: currentNode.id,
         matchedBranchId: null,
         done: false,
@@ -260,7 +226,7 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
     }
 
     if (!matched) {
-      const reAsk = result.reply ?? currentNode.question;
+      const reAsk = result.reply ?? displayQuestion(currentNode);
       let reply = reAsk;
 
       // Off-script question: answer it with a real web search (Perplexity Sonar Pro),
@@ -317,12 +283,10 @@ Always reply in the same language as the conversation. Respond ONLY as JSON: {"m
       return;
     }
 
-    // Entering a research-convention node: augment its reply with a live web
-    // lookup (company summary / real product catalog) before continuing.
+    // Entering the catalog node: augment its reply with a live web lookup of the
+    // company's real products before continuing.
     let reply = forcedAdvance ? target.question : (result.reply ?? target.question);
-    if (target.id === RESEARCH_NODE_ID) {
-      reply = await researchCompany(req, transcript, lastUser.content, target.question);
-    } else if (target.id === CATALOG_NODE_ID) {
+    if (target.id === CATALOG_NODE_ID) {
       reply = await researchCatalog(req, transcript, lastUser.content, target.question);
     }
 

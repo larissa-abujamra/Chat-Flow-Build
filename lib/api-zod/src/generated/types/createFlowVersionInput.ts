@@ -10,6 +10,8 @@ import type { FlowNode } from './flowNode';
 export interface CreateFlowVersionInput {
   name?: string;
   /** @nullable */
+  notes?: string | null;
+  /** @nullable */
   startNodeId: string | null;
   nodes: FlowNode[];
 }

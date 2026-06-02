@@ -95,9 +95,9 @@ paths:
                 $ref: "#/components/schemas/FlowVersion"
   /versions/{id}:
     patch:
-      operationId: renameFlowVersion
+      operationId: updateFlowVersion
       tags: [flow]
-      summary: Rename a flow version
+      summary: Update a flow version (rename and/or notes)
       parameters:
         - name: id
           in: path
@@ -227,12 +227,14 @@ components:
             $ref: "#/components/schemas/FlowNode"
     FlowVersion:
       type: object
-      required: [id, name, startNodeId, nodes, createdAt, updatedAt]
+      required: [id, name, notes, startNodeId, nodes, createdAt, updatedAt]
       properties:
         id:
           type: string
         name:
           type: string
+        notes:
+          type: ["string", "null"]
         startNodeId:
           type: ["string", "null"]
         nodes:
@@ -249,6 +251,8 @@ components:
       properties:
         name:
           type: string
+        notes:
+          type: ["string", "null"]
         startNodeId:
           type: ["string", "null"]
         nodes:
@@ -257,10 +261,11 @@ components:
             $ref: "#/components/schemas/FlowNode"
     UpdateFlowVersionInput:
       type: object
-      required: [name]
       properties:
         name:
           type: string
+        notes:
+          type: ["string", "null"]
     ChatMessage:
       type: object
       required: [role, content]

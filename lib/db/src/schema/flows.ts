@@ -36,6 +36,7 @@ export type FlowRow = typeof flowsTable.$inferSelect;
 export const flowVersionsTable = pgTable("flow_versions", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  notes: text("notes"),
   startNodeId: text("start_node_id"),
   nodes: jsonb("nodes").$type<FlowNodeData[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })

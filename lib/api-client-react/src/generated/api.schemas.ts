@@ -50,6 +50,8 @@ export interface FlowVersion {
   id: string;
   name: string;
   /** @nullable */
+  notes: string | null;
+  /** @nullable */
   startNodeId: string | null;
   nodes: FlowNode[];
   createdAt: string;
@@ -59,12 +61,16 @@ export interface FlowVersion {
 export interface CreateFlowVersionInput {
   name?: string;
   /** @nullable */
+  notes?: string | null;
+  /** @nullable */
   startNodeId: string | null;
   nodes: FlowNode[];
 }
 
 export interface UpdateFlowVersionInput {
-  name: string;
+  name?: string;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export type ChatMessageRole = typeof ChatMessageRole[keyof typeof ChatMessageRole];

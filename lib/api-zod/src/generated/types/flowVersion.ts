@@ -11,6 +11,8 @@ export interface FlowVersion {
   id: string;
   name: string;
   /** @nullable */
+  notes: string | null;
+  /** @nullable */
   startNodeId: string | null;
   nodes: FlowNode[];
   createdAt: string;

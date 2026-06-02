@@ -420,7 +420,7 @@ export const useCreateFlowVersion = <TError = ErrorType<unknown>,
       return useMutation(getCreateFlowVersionMutationOptions(options));
     }
 
-export const getRenameFlowVersionUrl = (id: string,) => {
+export const getUpdateFlowVersionUrl = (id: string,) => {
 
 
 
@@ -429,12 +429,12 @@ export const getRenameFlowVersionUrl = (id: string,) => {
 }
 
 /**
- * @summary Rename a flow version
+ * @summary Update a flow version (rename and/or notes)
  */
-export const renameFlowVersion = async (id: string,
+export const updateFlowVersion = async (id: string,
     updateFlowVersionInput: UpdateFlowVersionInput, options?: RequestInit): Promise<FlowVersion> => {
 
-  return customFetch<FlowVersion>(getRenameFlowVersionUrl(id),
+  return customFetch<FlowVersion>(getUpdateFlowVersionUrl(id),
   {
     ...options,
     method: 'PATCH',
@@ -447,11 +447,11 @@ export const renameFlowVersion = async (id: string,
 
 
 
-export const getRenameFlowVersionMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof renameFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext> => {
+export const getUpdateFlowVersionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext> => {
 
-const mutationKey = ['renameFlowVersion'];
+const mutationKey = ['updateFlowVersion'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -461,10 +461,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameFlowVersion>>, {id: string;data: BodyType<UpdateFlowVersionInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFlowVersion>>, {id: string;data: BodyType<UpdateFlowVersionInput>}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  renameFlowVersion(id,data,requestOptions)
+          return  updateFlowVersion(id,data,requestOptions)
         }
 
 
@@ -474,22 +474,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type RenameFlowVersionMutationResult = NonNullable<Awaited<ReturnType<typeof renameFlowVersion>>>
-    export type RenameFlowVersionMutationBody = BodyType<UpdateFlowVersionInput>
-    export type RenameFlowVersionMutationError = ErrorType<void>
+    export type UpdateFlowVersionMutationResult = NonNullable<Awaited<ReturnType<typeof updateFlowVersion>>>
+    export type UpdateFlowVersionMutationBody = BodyType<UpdateFlowVersionInput>
+    export type UpdateFlowVersionMutationError = ErrorType<void>
 
     /**
- * @summary Rename a flow version
+ * @summary Update a flow version (rename and/or notes)
  */
-export const useRenameFlowVersion = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useUpdateFlowVersion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowVersion>>, TError,{id: string;data: BodyType<UpdateFlowVersionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof renameFlowVersion>>,
+        Awaited<ReturnType<typeof updateFlowVersion>>,
         TError,
         {id: string;data: BodyType<UpdateFlowVersionInput>},
         TContext
       > => {
-      return useMutation(getRenameFlowVersionMutationOptions(options));
+      return useMutation(getUpdateFlowVersionMutationOptions(options));
     }
 
 export const getDeleteFlowVersionUrl = (id: string,) => {

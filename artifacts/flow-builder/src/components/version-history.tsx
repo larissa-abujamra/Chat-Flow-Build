@@ -3,13 +3,14 @@ import {
   FlowInput,
   FlowVersion,
   useListFlowVersions,
-  useRenameFlowVersion,
+  useUpdateFlowVersion,
   useDeleteFlowVersion,
   getListFlowVersionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -30,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { History, Pencil, Check, X, Trash2, RotateCcw } from "lucide-react";
+import { History, Pencil, Check, X, Trash2, RotateCcw, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function formatDate(iso: string) {
@@ -48,13 +49,15 @@ export default function VersionHistory({
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [notesId, setNotesId] = useState<string | null>(null);
+  const [draftNotes, setDraftNotes] = useState("");
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: versions, isLoading, isError } = useListFlowVersions({
     query: { queryKey: getListFlowVersionsQueryKey(), enabled: open },
   });
-  const renameVersion = useRenameFlowVersion();
+  const updateVersion = useUpdateFlowVersion();
   const deleteVersion = useDeleteFlowVersion();
 
   const invalidate = () =>
@@ -73,7 +76,7 @@ export default function VersionHistory({
   const saveEdit = (id: string) => {
     const name = draftName.trim();
     if (!name) return;
-    renameVersion.mutate(
+    updateVersion.mutate(
       { id, data: { name } },
       {
         onSuccess: () => {
@@ -81,6 +84,29 @@ export default function VersionHistory({
           invalidate();
         },
         onError: () => toast({ title: "Failed to rename version", variant: "destructive" }),
+      },
+    );
+  };
+
+  const startNotes = (v: FlowVersion) => {
+    setNotesId(v.id);
+    setDraftNotes(v.notes ?? "");
+  };
+
+  const cancelNotes = () => {
+    setNotesId(null);
+    setDraftNotes("");
+  };
+
+  const saveNotes = (id: string) => {
+    updateVersion.mutate(
+      { id, data: { notes: draftNotes.trim() || null } },
+      {
+        onSuccess: () => {
+          cancelNotes();
+          invalidate();
+        },
+        onError: () => toast({ title: "Failed to save notes", variant: "destructive" }),
       },
     );
   };
@@ -152,7 +178,7 @@ export default function VersionHistory({
                         variant="ghost"
                         className="h-8 w-8 shrink-0"
                         onClick={() => saveEdit(v.id)}
-                        disabled={renameVersion.isPending}
+                        disabled={updateVersion.isPending}
                       >
                         <Check className="w-4 h-4" />
                       </Button>
@@ -182,6 +208,44 @@ export default function VersionHistory({
                     </div>
                   )}
 
+                  {notesId === v.id ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Textarea
+                        value={draftNotes}
+                        onChange={(e) => setDraftNotes(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveNotes(v.id);
+                          if (e.key === "Escape") cancelNotes();
+                        }}
+                        autoFocus
+                        rows={3}
+                        placeholder="Add any notes about this version…"
+                        className="text-sm resize-none"
+                      />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button size="sm" variant="ghost" className="h-7" onClick={cancelNotes}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 gap-1.5"
+                          onClick={() => saveNotes(v.id)}
+                          disabled={updateVersion.isPending}
+                        >
+                          <Check className="w-3.5 h-3.5" /> Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : v.notes ? (
+                    <button
+                      type="button"
+                      onClick={() => startNotes(v)}
+                      className="text-left text-sm text-muted-foreground whitespace-pre-wrap rounded-md hover:bg-muted/60 px-1.5 py-1 -mx-1.5 transition-colors"
+                    >
+                      {v.notes}
+                    </button>
+                  ) : null}
+
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
@@ -191,6 +255,16 @@ export default function VersionHistory({
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Load
                     </Button>
+                    {notesId !== v.id && !v.notes && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1.5 text-muted-foreground"
+                        onClick={() => startNotes(v)}
+                      >
+                        <StickyNote className="w-3.5 h-3.5" /> Add notes
+                      </Button>
+                    )}
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button size="sm" variant="ghost" className="gap-1.5 text-destructive hover:text-destructive">

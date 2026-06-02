@@ -7,5 +7,7 @@
  */
 
 export interface UpdateFlowVersionInput {
-  name: string;
+  name?: string;
+  /** @nullable */
+  notes?: string | null;
 }
