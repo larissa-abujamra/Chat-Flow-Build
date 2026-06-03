@@ -8,8 +8,9 @@ import {
   Mic,
   Settings,
   Zap,
+  Send,
 } from 'lucide-react'
-import type { FlowDefinition, FlowNode, ActionKind } from '@/types'
+import type { FlowDefinition, FlowNode, ActionKind, OpcaoItem } from '@/types'
 import { Button } from './ui/button'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -18,13 +19,51 @@ type ChatItem =
   | { kind: 'bot'; text: string; nodeId: string }
   | { kind: 'action'; actionKind: ActionKind; label: string; nodeId: string }
   | { kind: 'user'; text: string; nodeId: string }
-  | { kind: 'choices'; opcoes: Array<{ id: string; label: string }>; nodeId: string; chosen?: string }
 
 interface PreviewState {
   items: ChatItem[]
   currentNodeId: string | null
-  waitingForChoice: boolean
+  waitingForInput: boolean
   done: boolean
+}
+
+// ── Flexible text matching ───────────────────────────────────────────────────
+
+function norm(s: string) {
+  return s.toLowerCase().trim().replace(/[.,!?;]/g, '').trim()
+}
+
+function matchOpcao(input: string, opcoes: OpcaoItem[]): OpcaoItem | null {
+  if (opcoes.length === 0) return null
+  // Single path — any input advances
+  if (opcoes.length === 1) return opcoes[0]
+
+  const n = norm(input)
+
+  // 1. Exact match on label or any variant
+  for (const o of opcoes) {
+    if (norm(o.label) === n) return o
+    if (o.variants?.some((v) => norm(v) === n)) return o
+  }
+
+  // 2. Contains match (input contains label or label contains input)
+  for (const o of opcoes) {
+    const nl = norm(o.label)
+    if (n.includes(nl) || nl.includes(n)) return o
+    if (o.variants?.some((v) => { const nv = norm(v); return n.includes(nv) || nv.includes(n) })) return o
+  }
+
+  // 3. First-word match
+  const firstWord = n.split(/\s+/)[0]
+  if (firstWord) {
+    for (const o of opcoes) {
+      if (norm(o.label).startsWith(firstWord)) return o
+      if (o.variants?.some((v) => norm(v).startsWith(firstWord))) return o
+    }
+  }
+
+  // 4. Default: first option
+  return opcoes[0]
 }
 
 // ── Traversal helpers ────────────────────────────────────────────────────────
@@ -43,12 +82,6 @@ function nextNode(flow: FlowDefinition, nodeId: string, sourceHandle?: string): 
   return flow.nodes.find((n) => n.id === edge.target) ?? null
 }
 
-/**
- * Walk from a given node, appending auto-advance items (bot, action) until
- * we either hit a question, end, or dead-end. Returns the updated state.
- *
- * `visited` prevents infinite loops.
- */
 function walkForward(
   flow: FlowDefinition,
   startId: string,
@@ -68,7 +101,6 @@ function walkForward(
     const data = node.data
 
     if (data.type === 'start') {
-      // Silently advance past start
       const next = nextNode(flow, node.id)
       nodeId = next?.id ?? null
       continue
@@ -82,17 +114,8 @@ function walkForward(
     }
 
     if (data.type === 'question') {
-      items.push({
-        kind: 'bot',
-        text: data.texto,
-        nodeId: node.id,
-      })
-      items.push({
-        kind: 'choices',
-        opcoes: data.opcoes,
-        nodeId: node.id,
-      })
-      return { items, currentNodeId: node.id, waitingForChoice: true, done: false }
+      items.push({ kind: 'bot', text: data.texto, nodeId: node.id })
+      return { items, currentNodeId: node.id, waitingForInput: true, done: false }
     }
 
     if (data.type === 'action') {
@@ -103,17 +126,14 @@ function walkForward(
     }
 
     if (data.type === 'end') {
-      if (data.texto) {
-        items.push({ kind: 'bot', text: data.texto, nodeId: node.id })
-      }
-      return { items, currentNodeId: node.id, waitingForChoice: false, done: true }
+      if (data.texto) items.push({ kind: 'bot', text: data.texto, nodeId: node.id })
+      return { items, currentNodeId: node.id, waitingForInput: false, done: true }
     }
 
     break
   }
 
-  // Dead end or disconnected
-  return { items, currentNodeId: nodeId, waitingForChoice: false, done: false }
+  return { items, currentNodeId: nodeId, waitingForInput: false, done: false }
 }
 
 // ── Action icon map ──────────────────────────────────────────────────────────
@@ -141,11 +161,13 @@ export default function ChatPreview({
   const [state, setState] = useState<PreviewState>({
     items: [],
     currentNodeId: null,
-    waitingForChoice: false,
+    waitingForInput: false,
     done: false,
   })
   const [started, setStarted] = useState(false)
+  const [inputText, setInputText] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const notifyActive = useCallback(
     (nodeId: string | null) => onActiveNodeChange(nodeId),
@@ -158,7 +180,7 @@ export default function ChatPreview({
       setState({
         items: [{ kind: 'bot', text: '⚠️ Fluxo sem nó de início.', nodeId: '' }],
         currentNodeId: null,
-        waitingForChoice: false,
+        waitingForInput: false,
         done: false,
       })
       setStarted(true)
@@ -170,7 +192,7 @@ export default function ChatPreview({
       : {
           items: [{ kind: 'bot' as const, text: '(Nó start sem conexão.)', nodeId: startNode.id }],
           currentNodeId: startNode.id,
-          waitingForChoice: false,
+          waitingForInput: false,
           done: false,
         }
     setState(newState)
@@ -178,30 +200,45 @@ export default function ChatPreview({
     notifyActive(newState.currentNodeId)
   }, [flow, notifyActive])
 
-  const handleChoice = useCallback(
-    (nodeId: string, opcaoId: string, opcaoLabel: string) => {
-      setState((prev) => {
-        // Replace the pending choices item with a confirmed one + user message
-        const items: ChatItem[] = prev.items.map((item) =>
-          item.kind === 'choices' && item.nodeId === nodeId && !item.chosen
-            ? { ...item, chosen: opcaoId }
-            : item
-        )
-        items.push({ kind: 'user', text: opcaoLabel, nodeId })
+  const handleTextSubmit = useCallback(
+    (text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed || !state.currentNodeId) return
 
-        // Find the edge keyed by sourceHandle = opcaoId
-        const edge = flow.edges.find(
-          (e) => e.source === nodeId && e.sourceHandle === opcaoId
-        )
-        if (!edge) {
-          // Dead end — no edge for this option
+      setState((prev) => {
+        const node = flow.nodes.find((n) => n.id === prev.currentNodeId)
+        if (!node || node.data.type !== 'question') return prev
+
+        const opcoes = node.data.opcoes
+        const matched = matchOpcao(trimmed, opcoes)
+
+        const items: ChatItem[] = [
+          ...prev.items,
+          { kind: 'user', text: trimmed, nodeId: node.id },
+        ]
+
+        if (!matched) {
           return {
             ...prev,
             items: [
               ...items,
-              { kind: 'bot', text: '(Essa opção ainda não tem destino.)', nodeId },
+              { kind: 'bot', text: '(Essa pergunta ainda não tem respostas configuradas.)', nodeId: node.id },
             ],
-            waitingForChoice: false,
+            waitingForInput: false,
+          }
+        }
+
+        const edge = flow.edges.find(
+          (e) => e.source === node.id && e.sourceHandle === matched.id
+        )
+        if (!edge) {
+          return {
+            ...prev,
+            items: [
+              ...items,
+              { kind: 'bot', text: '(Essa resposta ainda não tem destino configurado.)', nodeId: node.id },
+            ],
+            waitingForInput: false,
           }
         }
 
@@ -209,29 +246,35 @@ export default function ChatPreview({
         notifyActive(newState.currentNodeId)
         return newState
       })
+
+      setInputText('')
     },
-    [flow, notifyActive]
+    [flow, state.currentNodeId, notifyActive]
   )
 
   const restart = useCallback(() => {
     setStarted(false)
-    setState({ items: [], currentNodeId: null, waitingForChoice: false, done: false })
+    setInputText('')
+    setState({ items: [], currentNodeId: null, waitingForInput: false, done: false })
     notifyActive(null)
   }, [notifyActive])
 
-  // Scroll to bottom whenever items change
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [state.items])
 
+  useEffect(() => {
+    if (state.waitingForInput) inputRef.current?.focus()
+  }, [state.waitingForInput])
+
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={onToggleCollapse}
-        className="flex items-center gap-1.5 h-full px-3 border-l border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors writing-mode-vertical"
+        className="flex items-center gap-1.5 h-full px-3 border-l border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         style={{ writingMode: 'vertical-lr' }}
         title="Abrir preview"
       >
@@ -246,7 +289,6 @@ export default function ChatPreview({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          {/* Waz avatar */}
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
             style={{ background: 'hsl(var(--waz))' }}
@@ -259,32 +301,17 @@ export default function ChatPreview({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={restart}
-            title="Reiniciar preview"
-            aria-label="Reiniciar"
-          >
+          <Button variant="ghost" size="icon" onClick={restart} title="Reiniciar preview" aria-label="Reiniciar">
             <RotateCcw className="w-4 h-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggleCollapse}
-            title="Recolher preview"
-            aria-label="Recolher"
-          >
+          <Button variant="ghost" size="icon" onClick={onToggleCollapse} title="Recolher preview" aria-label="Recolher">
             <PanelRightClose className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {/* Messages area */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-secondary/40"
-      >
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-secondary/40">
         {!started && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
             <div
@@ -350,50 +377,6 @@ export default function ChatPreview({
             )
           }
 
-          if (item.kind === 'choices') {
-            if (item.chosen) {
-              // Already chosen — show greyed-out buttons
-              return (
-                <div key={i} className="flex flex-wrap gap-1.5 pl-8">
-                  {item.opcoes.map((o) => (
-                    <span
-                      key={o.id}
-                      className={`px-3 py-1.5 rounded-full text-xs border text-muted-foreground ${
-                        o.id === item.chosen
-                          ? 'border-foreground/30 bg-muted'
-                          : 'border-border opacity-40'
-                      }`}
-                    >
-                      {o.label}
-                    </span>
-                  ))}
-                </div>
-              )
-            }
-
-            // Active — show clickable buttons
-            return (
-              <div key={i} className="flex flex-wrap gap-1.5 pl-8">
-                {item.opcoes.length === 0 ? (
-                  <span className="text-xs text-muted-foreground italic">
-                    (nenhuma opção adicionada)
-                  </span>
-                ) : (
-                  item.opcoes.map((o) => (
-                    <button
-                      key={o.id}
-                      type="button"
-                      onClick={() => handleChoice(item.nodeId, o.id, o.label)}
-                      className="px-3 py-1.5 rounded-full text-xs border border-border bg-card hover:bg-muted hover:border-foreground/30 transition-colors font-medium"
-                    >
-                      {o.label}
-                    </button>
-                  ))
-                )}
-              </div>
-            )
-          }
-
           return null
         })}
 
@@ -406,7 +389,7 @@ export default function ChatPreview({
           </div>
         )}
 
-        {started && !state.done && !state.waitingForChoice && state.items.length > 0 && (
+        {started && !state.done && !state.waitingForInput && state.items.length > 0 && (
           <div className="flex justify-start pl-8">
             <div className="px-3.5 py-2.5 bg-card border border-border rounded-2xl rounded-tl-sm flex items-center gap-1.5">
               <span className="sr-only">Waz está digitando</span>
@@ -417,6 +400,30 @@ export default function ChatPreview({
           </div>
         )}
       </div>
+
+      {/* Text input bar */}
+      {started && !state.done && state.waitingForInput && (
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleTextSubmit(inputText) }}
+          className="px-3 py-2.5 border-t border-border bg-card shrink-0 flex items-center gap-2"
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Digite sua resposta…"
+            className="flex-1 rounded-full border border-border bg-background px-3.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <button
+            type="submit"
+            disabled={!inputText.trim()}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-primary text-primary-foreground disabled:opacity-40 transition-opacity shrink-0"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </form>
+      )}
     </div>
   )
 }

@@ -83,7 +83,7 @@ export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
         </div>
 
         <div className="space-y-1.5">
-          <span className="eyebrow">Opções (botões)</span>
+          <span className="eyebrow">Respostas esperadas</span>
           {nodeData.opcoes.map((opcao, i) => (
             <div key={opcao.id} className="flex items-center gap-1.5">
               <span
@@ -96,7 +96,7 @@ export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
                 value={opcao.label}
                 onChange={(e) => updateOpcaoLabel(opcao.id, e.target.value)}
                 className="nodrag nowheel flex-1 min-w-0 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                placeholder="Texto do botão"
+                placeholder="Resposta do usuário"
               />
               <button
                 type="button"
@@ -112,7 +112,7 @@ export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
             className="nodrag flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
             onClick={addOpcao}
           >
-            <Plus className="w-3 h-3" /> Adicionar opção
+            <Plus className="w-3 h-3" /> Adicionar resposta
           </button>
         </div>
       </div>

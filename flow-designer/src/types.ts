@@ -12,6 +12,7 @@ export type NodeData =
 export interface OpcaoItem {
   id: string
   label: string
+  variants?: string[] // alternative phrasings that route to the same destination
 }
 
 export interface FlowNode {
