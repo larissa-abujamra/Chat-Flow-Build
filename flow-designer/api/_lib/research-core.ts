@@ -322,7 +322,7 @@ export async function fetchGooglePlaces(
         textQuery: [business, city].filter(Boolean).join(" "),
         languageCode: "pt-BR",
         regionCode: "BR",
-        maxResultCount: 5,
+        maxResultCount: 10,
       }),
     });
     if (!apiRes.ok) return null;
@@ -330,7 +330,8 @@ export async function fetchGooglePlaces(
     const places = Array.isArray(data.places) ? (data.places as Record<string, any>[]) : [];
     if (!places.length) return null;
     const s = (v: unknown) => String(v ?? "").trim();
-    const mapped = places.slice(0, 4).map((pl) => {
+    // mapeia até 8 (o ranking por cidade em /api/places escolhe os 4 finais).
+    const mapped = places.slice(0, 8).map((pl) => {
       const comps = Array.isArray(pl.addressComponents) ? pl.addressComponents : [];
       const findComp = (type: string, short = false) => {
         const c = comps.find(

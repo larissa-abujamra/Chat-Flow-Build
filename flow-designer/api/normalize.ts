@@ -15,6 +15,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let business = "";
   let city = "";
   try {
+    // ── Modo "pergunte qualquer coisa" ────────────────────────────────────
+    // Consolidado AQUI (em vez de um /api/ask separado) para o deploy caber no
+    // limite de 12 Serverless Functions do plano Hobby da Vercel. Se o corpo
+    // trouxer `question`, respondemos a pergunta paralela e retornamos {answer}.
+    const question = String((body as Record<string, unknown>).question || "").trim().slice(0, 1000);
+    if (question) {
+      const askKey = process.env.OPENROUTER_API_KEY;
+      if (!askKey) { res.status(200).json({ answer: "" }); return; }
+      const askBiz = String(body.business || "").trim();
+      const askRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${askKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          reasoning: { enabled: false },
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é o assistente do Squad ajudando um lojista durante o onboarding. " +
+                "O usuário fez uma pergunta paralela (fora do roteiro). Responda de forma " +
+                "BREVE, correta e amigável, em português do Brasil (1 a 3 frases). " +
+                "Nunca invente: se não souber, diga que não sabe. Não repita a pergunta. " +
+                (askBiz ? `O negócio dele se chama "${askBiz}". ` : "") +
+                "Depois desta resposta o onboarding continua normalmente.",
+            },
+            { role: "user", content: question },
+          ],
+          max_tokens: 400,
+        }),
+      });
+      if (!askRes.ok) { res.status(200).json({ answer: "" }); return; }
+      const askData: any = await askRes.json();
+      const answer = String(askData?.choices?.[0]?.message?.content || "").trim();
+      res.status(200).json({ answer }); return;
+    }
+
     business = String(body.business || "").trim();
     city = String(body.city || "").trim();
     if (!business && !city) {
@@ -35,18 +72,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           {
             role: "system",
             content:
-              "Você normaliza textos que um usuário brasileiro digitou. Apenas conserte a grafia: capitalização correta, acentuação e expansão de abreviações/apelidos comuns de cidades. NUNCA invente, traduza ou troque o nome por outro negócio; se não reconhecer, só ajuste capitalização e acentos. Responda SOMENTE com JSON válido, sem markdown.",
+              "Você normaliza APENAS o nome de uma cidade brasileira que um usuário digitou: conserte capitalização, acentuação e expanda abreviações/apelidos comuns. NUNCA invente nem troque por outra cidade; se não reconhecer, só ajuste capitalização e acentos. Responda SOMENTE com JSON válido, sem markdown.",
           },
           {
             role: "user",
             content:
-              `Normalize os campos a seguir (deixe vazio o que vier vazio):\n` +
-              `nome do negócio: "${business}"\n` +
+              `Normalize SOMENTE a cidade a seguir (deixe vazio se vier vazio):\n` +
               `cidade: "${city}"\n\n` +
-              `Para a cidade, escreva o nome oficial com acentos e, quando óbvio, no formato "Cidade - UF" ` +
+              `Escreva o nome oficial com acentos e, quando óbvio, no formato "Cidade - UF" ` +
               `(ex.: "sp"/"sampa"/"sao paulo" → "São Paulo - SP"; "rj" → "Rio de Janeiro - RJ"; "bh" → "Belo Horizonte - MG"; "poa" → "Porto Alegre - RS"). ` +
-              `Para o nome do negócio, use capitalização e acentos corretos, preservando siglas/estilizações próprias da marca. ` +
-              `Retorne EXATO: {"business":"...","city":"..."}.`,
+              `Retorne EXATO: {"city":"..."}.`,
           },
         ],
         max_tokens: 200,
@@ -55,10 +90,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!orRes.ok) { res.status(200).json({ business, city }); return; }
     const data: any = await orRes.json();
     const parsed = extractJson(data?.choices?.[0]?.message?.content || "");
-    // Fallback para o valor digitado se o modelo devolver vazio.
-    const outBiz = String(parsed.business || "").trim() || business;
+    // Nome do negócio: mantém EXATAMENTE como o usuário digitou (não corrige).
+    // Só a cidade é normalizada; cai pro valor digitado se o modelo vier vazio.
     const outCity = String(parsed.city || "").trim() || city;
-    res.status(200).json({ business: outBiz, city: outCity }); return;
+    res.status(200).json({ business, city: outCity }); return;
   } catch {
     // Falha inesperada: devolve o que foi digitado, sem quebrar o fluxo.
     res.status(200).json({ business, city }); return;

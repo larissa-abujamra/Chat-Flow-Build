@@ -1377,6 +1377,61 @@ export function OnboardingPreview({
     }
   };
 
+  // ── "Pergunte qualquer coisa" no meio do fluxo ────────────────────────────
+  // O lojista pode virar no meio do onboarding e perguntar algo geral (ex.:
+  // "qual a capital do Brasil?"). Detectamos perguntas paralelas, respondemos
+  // via /api/ask e voltamos a fazer a pergunta atual — sem perder o lugar.
+  const looksLikeSideQuestion = (v: string): boolean => {
+    const t = v.trim().toLowerCase();
+    if (t.length < 3) return false;
+    if (t.endsWith("?")) return true;
+    return /^(o que|oq|qual|quais|quanto|quantos|quantas|quem|onde|aonde|quando|como|por que|por quê|porque|porquê|pra que|para que|cad[êe]|me (diz|explica|fala)|voc[êe] sabe|sabe me dizer)\b/.test(
+      t,
+    );
+  };
+
+  const askAssistant = async (question: string): Promise<string> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      // /api/normalize responde também ao modo "pergunta paralela" quando o
+      // corpo traz `question` (consolidado lá p/ caber no limite de 12 funções
+      // Serverless do plano Hobby da Vercel).
+      const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, business: businessNameRef.current.trim() }),
+        signal: ctrl.signal,
+      });
+      const json = await r.json();
+      return (json && typeof json.answer === "string" ? json.answer.trim() : "") || "";
+    } catch {
+      return "";
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Responde a pergunta paralela e re-exibe a pergunta atual. NÃO consome o
+  // campo (o `pending` continua o mesmo), então o input segue aberto pra
+  // resposta real depois.
+  const answerSideQuestion = async (q: string) => {
+    // captura a última fala do assistente (a pergunta atual) p/ re-perguntar.
+    const lastQuestion = [...chat].reverse().find(
+      (m) => m.sender === "oddy" && m.kind === "text",
+    )?.text;
+    addUser(q);
+    setTextDraft("");
+    setTyping(true);
+    const reply = await askAssistant(q);
+    setTyping(false);
+    addOddy(reply || "Não consegui responder isso agora, mas seguimos! 🙂");
+    if (lastQuestion) {
+      await new Promise((r) => setTimeout(r, 450));
+      addOddy(lastQuestion);
+    }
+  };
+
   const fetchPlaces = async (
     business: string,
     city: string,
@@ -2476,6 +2531,12 @@ export function OnboardingPreview({
     if (!pending || pending.kind !== "textInput") return;
     const v = textDraft.trim();
     if (!v) return;
+    // Pergunta paralela ("qual a capital do Brasil?") → responde e re-pergunta,
+    // sem consumir o campo. O CNPJ é só dígitos, então nunca cai aqui.
+    if (pending.field !== "cnpj" && looksLikeSideQuestion(v)) {
+      void answerSideQuestion(v);
+      return;
+    }
     const field = pending.field;
     setPending(null);
     addUser(v);

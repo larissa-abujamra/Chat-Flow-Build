@@ -3,6 +3,33 @@ import { fetchGooglePlaces, webSearchWithFallback, extractJson } from './_lib/re
 
 export const config = { maxDuration: 60 }
 
+// Prioriza candidatos cuja cidade/UF batem com a que o usuário informou — sem
+// descartar os demais (ficam no fim). Marcas grandes (ex.: Madero) podem ranquear
+// uma unidade de outra cidade no topo; aqui garantimos que a cidade pedida venha
+// primeiro. Comparação sem acento/caixa; casa por nome de cidade e/ou UF final.
+const stripA = (s: string) =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+const cityKey = (s: string): { city: string; uf: string } => {
+  const n = stripA(s);
+  const m = n.match(/^(.*?)\s*-\s*([a-z]{2})\s*$/);
+  return m ? { city: m[1].trim(), uf: m[2] } : { city: n.replace(/[,].*$/, "").trim(), uf: "" };
+};
+function rankByCity<T extends { cidade?: string }>(cands: T[], requested: string): T[] {
+  const r = cityKey(requested || "");
+  if (!r.city && !r.uf) return cands;
+  const score = (c: T): number => {
+    const k = cityKey(String(c.cidade || ""));
+    let s = 0;
+    if (r.city && k.city && (k.city === r.city || k.city.includes(r.city) || r.city.includes(k.city))) s += 2;
+    if (r.uf && k.uf && r.uf === k.uf) s += 1;
+    return s;
+  };
+  return cands
+    .map((c, i) => ({ c, i, s: score(c) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((x) => x.c);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -27,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (gKey) {
       const gp = await fetchGooglePlaces(gKey, business, city);
       if (gp && gp.length) {
-        const candidatos = gp
+        const mapped = gp
           .map((c) => ({
             nome: c.nome,
             endereco: c.endereco,
@@ -37,8 +64,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             horario: c.horario,
             site: c.website,
           }))
-          .filter((c) => c.endereco)
-          .slice(0, 4);
+          .filter((c) => c.endereco);
+        // cidade pedida primeiro, depois corta em 4.
+        const candidatos = rankByCity(mapped, city).slice(0, 4);
         if (candidatos.length) { res.status(200).json({ candidatos }); return; }
       }
     }
@@ -150,10 +178,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
           })
           .filter((c) => c.endereco)
-          .slice(0, 4)
       : [];
 
-    res.status(200).json({ candidatos }); return;
+    res.status(200).json({ candidatos: rankByCity(candidatos, city).slice(0, 4) }); return;
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : String(err),
