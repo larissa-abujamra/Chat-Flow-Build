@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Download, Upload, RotateCcw, Edit2, Check } from 'lucide-react'
+import { Download, Upload, Edit2, Check } from 'lucide-react'
 import type { FlowId } from '@/types'
 import { useFlow } from '@/store/useFlows'
 import FlowCanvas from '@/components/FlowCanvas'
@@ -118,6 +118,7 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
         {/* Chat preview — collapsible */}
         <ChatPreview
           flow={flow}
+          flowId={flowId}
           onActiveNodeChange={setActiveNodeId}
           collapsed={chatCollapsed}
           onToggleCollapse={() => setChatCollapsed((v) => !v)}
