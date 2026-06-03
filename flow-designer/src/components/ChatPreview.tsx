@@ -277,10 +277,10 @@ export default function ChatPreview({
     [onActiveNodeChange]
   )
 
-  // Replace {var} tokens with the values the user typed; unknown tokens stay
-  // literal (e.g. {site} before a site step). Applied at render time.
+  // Replace {var} tokens with the collected values; a not-yet-known var renders
+  // as empty (never a raw {brace}). Applied at render time.
   const subst = useCallback(
-    (t: string) => t.replace(/\{(\w+)\}/g, (_m, k) => vars[k] ?? `{${k}}`),
+    (t: string) => t.replace(/\{(\w+)\}/g, (_m, k) => vars[k] ?? ''),
     [vars]
   )
 

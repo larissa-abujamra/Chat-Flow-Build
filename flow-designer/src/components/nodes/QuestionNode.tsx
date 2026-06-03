@@ -2,6 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { HelpCircle, Plus, Trash2 } from 'lucide-react'
 import type { FlowRFNode } from './shared'
 import type { OpcaoItem } from '@/types'
+import { VarText } from './VarText'
 
 export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
   const nodeData = data.flowNode.data
@@ -64,17 +65,11 @@ export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
         </div>
 
         <div className="rounded-lg border-l-2 border-amber-400 bg-amber-50/60 px-2.5 py-2">
-          <textarea
+          <VarText
             value={nodeData.texto}
-            onChange={(e) =>
-              data.onUpdate({
-                ...nodeData,
-                texto: e.target.value,
-              })
-            }
+            onChange={(v) => data.onUpdate({ ...nodeData, texto: v })}
             rows={2}
             placeholder="Waz pergunta…"
-            className="nodrag nowheel w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
 

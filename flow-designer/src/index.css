@@ -123,6 +123,20 @@
     color: transparent;
   }
 
+  /* Variable chip — how {placeholders} render in the canvas (no raw braces) */
+  .var-chip {
+    display: inline-block;
+    padding: 0.02em 0.45em;
+    margin: 0 0.06em;
+    border-radius: 9999px;
+    background: hsl(var(--fin) / 0.16);
+    color: hsl(198 86% 36%);
+    font-weight: 600;
+    font-size: 0.86em;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
   /* Typing indicator dots */
   .typing-dot {
     width: 0.45rem;
