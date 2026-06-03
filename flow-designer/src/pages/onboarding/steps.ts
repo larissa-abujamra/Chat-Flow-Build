@@ -29,12 +29,12 @@ export const DEFAULT_STEP_IDS = [
   "fulfillment",
   "tone_generated",
   "emojis",
-  "escalation",
-  "tasks",
   "review",
   "configured",
   "features",
 ];
+// (escalation e tasks foram removidos do onboarding — vão pra página de
+// configuração pós-onboarding, junto de carro_chefe e payment.)
 
 export const DEFAULT_STEPS: Step[] = DEFAULT_STEP_IDS.map((id) => ({
   id,
