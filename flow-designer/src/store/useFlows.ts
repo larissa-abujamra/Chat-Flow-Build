@@ -625,6 +625,30 @@ const FLOW_STEFANO_BASE: FlowDefinition = {
       },
     },
     {
+      id: 'fs-q-fulfillment',
+      type: 'question',
+      position: { x: 300, y: 2280 },
+      data: {
+        type: 'question',
+        texto: 'Como seus clientes recebem os pedidos?',
+        opcoes: [
+          { id: 'fs-q-fulfillment-r1', label: 'Entrega' },
+          { id: 'fs-q-fulfillment-r2', label: 'Retirada' },
+          { id: 'fs-q-fulfillment-r3', label: 'Entrega e retirada' },
+        ],
+      },
+    },
+    {
+      id: 'fs-q-payment',
+      type: 'question',
+      position: { x: 300, y: 2460 },
+      data: {
+        type: 'question',
+        texto: 'Quais formas de pagamento você aceita? Se aceitar Pix, me passa a chave.',
+        opcoes: [{ id: 'fs-q-payment-r1', label: 'Formas de pagamento' }],
+      },
+    },
+    {
       id: 'fs-act-tom',
       type: 'action',
       position: { x: 300, y: 2300 },
@@ -659,18 +683,51 @@ const FLOW_STEFANO_BASE: FlowDefinition = {
       },
     },
     {
-      id: 'fs-msg-configurado',
+      id: 'fs-q-escalation',
+      type: 'question',
+      position: { x: 300, y: 2860 },
+      data: {
+        type: 'question',
+        texto: 'Quando eu não souber resolver, pra qual WhatsApp eu chamo uma pessoa do time?',
+        opcoes: [{ id: 'fs-q-escalation-r1', label: 'WhatsApp do time' }],
+      },
+    },
+    {
+      id: 'fs-q-tasks',
+      type: 'question',
+      position: { x: 300, y: 3040 },
+      data: {
+        type: 'question',
+        texto: 'O que você quer que eu já comece a fazer?',
+        opcoes: [
+          { id: 'fs-q-tasks-r1', label: 'Responder clientes' },
+          { id: 'fs-q-tasks-r2', label: 'Anotar pedidos' },
+          { id: 'fs-q-tasks-r3', label: 'Enviar cardápio' },
+        ],
+      },
+    },
+    {
+      id: 'fs-msg-review',
       type: 'message',
-      position: { x: 300, y: 2920 },
+      position: { x: 300, y: 3220 },
       data: {
         type: 'message',
-        texto: 'Prontinho! Já sei quem você é e como falar. Bora ver o que eu sei fazer?',
+        texto: 'Fechou! Aqui está o resumo do que eu já sei. Tá tudo certo pra eu começar?',
+      },
+    },
+    {
+      id: 'fs-msg-configurado',
+      type: 'message',
+      position: { x: 300, y: 3400 },
+      data: {
+        type: 'message',
+        texto: 'Prontinho! Já sei quem você é, como falar e o que fazer. Bora ver o que eu sei fazer?',
       },
     },
     {
       id: 'fs-end',
       type: 'end',
-      position: { x: 300, y: 3160 },
+      position: { x: 300, y: 3580 },
       data: { type: 'end', texto: 'Ver funcionalidades 🚀' },
     },
   ],
@@ -691,14 +748,23 @@ const FLOW_STEFANO_BASE: FlowDefinition = {
     { id: 'fs-e14', source: 'fs-q-ifood', target: 'fs-q-catalogo', sourceHandle: 'fs-q-ifood-r3' },
     { id: 'fs-e15', source: 'fs-q-catalogo', target: 'fs-q-carrochefe', sourceHandle: 'fs-q-catalogo-r1' },
     { id: 'fs-e16', source: 'fs-q-catalogo', target: 'fs-q-carrochefe', sourceHandle: 'fs-q-catalogo-r2' },
-    { id: 'fs-e17', source: 'fs-q-carrochefe', target: 'fs-act-tom', sourceHandle: 'fs-q-carrochefe-r1' },
+    { id: 'fs-e17', source: 'fs-q-carrochefe', target: 'fs-q-fulfillment', sourceHandle: 'fs-q-carrochefe-r1' },
+    { id: 'fs-e17a', source: 'fs-q-fulfillment', target: 'fs-q-payment', sourceHandle: 'fs-q-fulfillment-r1' },
+    { id: 'fs-e17b', source: 'fs-q-fulfillment', target: 'fs-q-payment', sourceHandle: 'fs-q-fulfillment-r2' },
+    { id: 'fs-e17c', source: 'fs-q-fulfillment', target: 'fs-q-payment', sourceHandle: 'fs-q-fulfillment-r3' },
+    { id: 'fs-e17d', source: 'fs-q-payment', target: 'fs-act-tom', sourceHandle: 'fs-q-payment-r1' },
     { id: 'fs-e18', source: 'fs-act-tom', target: 'fs-q-tom' },
     { id: 'fs-e19', source: 'fs-q-tom', target: 'fs-q-emojis', sourceHandle: 'fs-q-tom-r1' },
     { id: 'fs-e20', source: 'fs-q-tom', target: 'fs-q-emojis', sourceHandle: 'fs-q-tom-r2' },
     { id: 'fs-e21', source: 'fs-q-tom', target: 'fs-q-emojis', sourceHandle: 'fs-q-tom-r3' },
-    { id: 'fs-e22', source: 'fs-q-emojis', target: 'fs-msg-configurado', sourceHandle: 'fs-q-emojis-r1' },
-    { id: 'fs-e23', source: 'fs-q-emojis', target: 'fs-msg-configurado', sourceHandle: 'fs-q-emojis-r2' },
-    { id: 'fs-e24', source: 'fs-q-emojis', target: 'fs-msg-configurado', sourceHandle: 'fs-q-emojis-r3' },
+    { id: 'fs-e22', source: 'fs-q-emojis', target: 'fs-q-escalation', sourceHandle: 'fs-q-emojis-r1' },
+    { id: 'fs-e23', source: 'fs-q-emojis', target: 'fs-q-escalation', sourceHandle: 'fs-q-emojis-r2' },
+    { id: 'fs-e24', source: 'fs-q-emojis', target: 'fs-q-escalation', sourceHandle: 'fs-q-emojis-r3' },
+    { id: 'fs-e24a', source: 'fs-q-escalation', target: 'fs-q-tasks', sourceHandle: 'fs-q-escalation-r1' },
+    { id: 'fs-e24b', source: 'fs-q-tasks', target: 'fs-msg-review', sourceHandle: 'fs-q-tasks-r1' },
+    { id: 'fs-e24c', source: 'fs-q-tasks', target: 'fs-msg-review', sourceHandle: 'fs-q-tasks-r2' },
+    { id: 'fs-e24d', source: 'fs-q-tasks', target: 'fs-msg-review', sourceHandle: 'fs-q-tasks-r3' },
+    { id: 'fs-e24e', source: 'fs-msg-review', target: 'fs-msg-configurado' },
     { id: 'fs-e25', source: 'fs-msg-configurado', target: 'fs-end' },
   ],
 }
@@ -717,32 +783,37 @@ const FS_STEP_MAP: Record<string, string> = {
   'fs-q-ifood': 'ifood',
   'fs-q-catalogo': 'catalog',
   'fs-q-carrochefe': 'carro_chefe',
+  'fs-q-fulfillment': 'fulfillment',
+  'fs-q-payment': 'payment',
   'fs-act-tom': 'tone_generated',
   'fs-q-tom': 'tone_generated',
   'fs-q-emojis': 'emojis',
+  'fs-q-escalation': 'escalation',
+  'fs-q-tasks': 'tasks',
+  'fs-msg-review': 'review',
   'fs-msg-configurado': 'configured',
   'fs-end': 'features',
 }
 
-function withStepIds(flow: FlowDefinition): FlowDefinition {
+function withStepIds(flow: FlowDefinition, map: Record<string, string>): FlowDefinition {
   return {
     ...flow,
     nodes: flow.nodes.map((n) =>
-      FS_STEP_MAP[n.id]
-        ? { ...n, data: { ...n.data, stepId: FS_STEP_MAP[n.id] } }
+      map[n.id]
+        ? { ...n, data: { ...n.data, stepId: map[n.id] } }
         : n,
     ),
   }
 }
 
-const FLOW_STEFANO: FlowDefinition = withStepIds(FLOW_STEFANO_BASE)
+const FLOW_STEFANO: FlowDefinition = withStepIds(FLOW_STEFANO_BASE, FS_STEP_MAP)
 
 // Flow Final — onboarding completo do Squad como grafo. Cada etapa de
 // enriquecimento é um nó de ação cujo label aponta o endpoint /api real que a
 // experiência ao vivo (/onboarding) chama. Usa os 4 kinds existentes (mesma
 // convenção do Fluxo Stefano). Placeholders {nome}/{negocio}/{cidade}/{site}
 // são literais no preview de design; o wizard ao vivo substitui pelos valores.
-const FLOW_FINAL: FlowDefinition = {
+const FLOW_FINAL_BASE: FlowDefinition = {
   id: 'flow-final',
   nome: 'Flow Final - Squad',
   scrapingEnabled: true,
@@ -822,8 +893,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 1660 },
       data: {
         type: 'question',
-        texto:
-          'Achei esses resultados. Qual é o seu?\n\n1 · Brigadayros — R. Simão Álvares, 29, Pinheiros\n2 · Brigadayros — Vila Madalena\n3 · Nenhum desses',
+        texto: 'Achei esses resultados. Qual é o seu?',
         opcoes: [
           { id: 'ff-q-resultado-r1', label: '1 · Pinheiros' },
           { id: 'ff-q-resultado-r2', label: '2 · Vila Madalena' },
@@ -837,8 +907,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 1900 },
       data: {
         type: 'question',
-        texto:
-          'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:\n\n📍 R. Simão Álvares, 29 - Pinheiros, São Paulo - SP, 05417-030\n📞 (11) 91234-5678',
+        texto: 'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:',
         opcoes: [{ id: 'ff-q-endereco-r1', label: 'Está tudo certo' }],
       },
     },
@@ -849,7 +918,7 @@ const FLOW_FINAL: FlowDefinition = {
       data: {
         type: 'question',
         texto:
-          'Achei o site do {negocio}: brigadayros.com.br\n\nÉ esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
+          'Achei o site do {negocio}. É esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
         opcoes: [{ id: 'ff-q-site-r1', label: 'Sim' }],
       },
     },
@@ -871,7 +940,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 2660 },
       data: {
         type: 'question',
-        texto: 'Encontrei esse Instagram aqui, seria seu?\n\n@brigadayros',
+        texto: 'Encontrei esse Instagram aqui, seria seu?',
         opcoes: [{ id: 'ff-q-instagram-r1', label: 'Sim' }],
       },
     },
@@ -977,8 +1046,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 5020 },
       data: {
         type: 'question',
-        texto:
-          'Com base no seu site e Instagram, criei esse tom de voz para você! O que achou?\n\n— exemplo —\nCliente: vcs fazem brigadeiro de pistache?\nWaz: Oii! 😋 Fazemos sim, fica uma delícia. Quer que eu monte um orçamento pra você?',
+        texto: 'Com base no seu site e Instagram, criei esse tom de voz para você! O que achou?',
         opcoes: [
           { id: 'ff-q-tom-r1', label: 'Gostei' },
           { id: 'ff-q-tom-r2', label: 'Quero ajustar' },
@@ -1046,6 +1114,30 @@ const FLOW_FINAL: FlowDefinition = {
     { id: 'ff-e32', source: 'ff-msg-testar', target: 'ff-end' },
   ],
 }
+
+// Liga os nós do Flow Final às etapas do onboarding real → fluxo adaptativo: o
+// wizard roda com DADOS AO VIVO (Places/CNPJ/Instagram/iFood/catálogo/tom) do
+// negócio que o usuário digitar, reformado pela ordem/textos do Flow Final. Os
+// nós extras do Flow Final (boas-vindas, anexar PDF, horários, entrega, prazo,
+// "mais info") não têm etapa equivalente no wizard e são ignorados aqui.
+const FF_STEP_MAP: Record<string, string> = {
+  'ff-msg-welcome': 'welcome',
+  'ff-q-empresa': 'welcome',
+  'ff-q-cidade': 'ask_city',
+  'ff-q-resultado': 'place_pick',
+  'ff-q-endereco': 'confirm_contact',
+  'ff-q-site': 'confirm_site',
+  'ff-q-instagram': 'instagram',
+  'ff-act-redes': 'ifood',
+  'ff-act-ocr': 'catalog',
+  'ff-q-produto': 'carro_chefe',
+  'ff-act-tom': 'tone_generated',
+  'ff-q-tom': 'tone_generated',
+  'ff-msg-testar': 'configured',
+  'ff-end': 'features',
+}
+
+const FLOW_FINAL: FlowDefinition = withStepIds(FLOW_FINAL_BASE, FF_STEP_MAP)
 
 const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
