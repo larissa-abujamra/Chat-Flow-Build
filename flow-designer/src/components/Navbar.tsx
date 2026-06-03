@@ -1,14 +1,20 @@
 import { Link, useLocation } from 'wouter'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useFlowList } from '@/store/useFlows'
 
 export default function Navbar() {
   const [location, navigate] = useLocation()
-  const { tabs, addFlow } = useFlowList()
+  const { tabs, addFlow, removeFlow } = useFlowList()
 
   const handleAdd = () => {
     const id = addFlow()
     navigate(`/${id}`)
+  }
+
+  const handleDelete = (id: string, label: string) => {
+    if (!window.confirm(`Deletar o fluxo "${label}"? Essa ação não pode ser desfeita.`)) return
+    removeFlow(id)
+    if (location === `/${id}`) navigate('/flow-a')
   }
 
   return (
@@ -23,21 +29,39 @@ export default function Navbar() {
 
       {/* Flow tabs */}
       <div className="flex items-center gap-1">
-        {tabs.map(({ id, label }) => {
+        {tabs.map(({ id, label, custom }) => {
           const href = `/${id}`
           const isActive = location === href || (location === '/' && id === 'flow-a')
           return (
-            <Link
-              key={id}
-              href={href}
-              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              {label}
-            </Link>
+            <div key={id} className="relative flex items-center group">
+              <Link
+                href={href}
+                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                  custom ? 'pr-7' : ''
+                } ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                {label}
+              </Link>
+              {custom && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(id, label)}
+                  className={`absolute right-1.5 flex items-center justify-center w-4 h-4 rounded-full transition-opacity opacity-0 group-hover:opacity-100 ${
+                    isActive
+                      ? 'text-primary-foreground/80 hover:text-primary-foreground'
+                      : 'text-muted-foreground hover:text-destructive'
+                  }`}
+                  title="Deletar fluxo"
+                  aria-label={`Deletar ${label}`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           )
         })}
 

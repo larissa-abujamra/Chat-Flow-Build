@@ -1189,7 +1189,10 @@ export function useFlowList() {
     return []
   })
 
-  const tabs = [...DEFAULT_TABS, ...extra]
+  const tabs = [
+    ...DEFAULT_TABS.map((t) => ({ ...t, custom: false })),
+    ...extra.map((t) => ({ ...t, custom: true })),
+  ]
 
   const addFlow = useCallback((): string => {
     const id = `flow-${Date.now()}`
@@ -1201,5 +1204,18 @@ export function useFlowList() {
     return id
   }, [])
 
-  return { tabs, addFlow }
+  // Removes a custom (non-default) flow: its tab, its saved data, and its row.
+  const removeFlow = useCallback((id: string) => {
+    setExtra((prev) => {
+      const next = prev.filter((t) => t.id !== id)
+      try { localStorage.setItem('waz-extra-flows', JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+    try { localStorage.removeItem(`waz-flow-${id}`) } catch { /* ignore */ }
+    if (supabase) {
+      supabase.from('flows').delete().eq('id', id).then(() => {}, () => {})
+    }
+  }, [])
+
+  return { tabs, addFlow, removeFlow }
 }
