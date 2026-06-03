@@ -6,7 +6,7 @@ import {
   verifyIfoodUrl,
   pickIfoodDeterministic,
   pickIfoodMatch,
-} from '../_lib/research-core'
+} from '../_lib/research-core.js'
 
 export const config = { maxDuration: 60 }
 

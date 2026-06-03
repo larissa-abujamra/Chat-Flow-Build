@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fetchCnpjData } from './_lib/research-core'
+import { fetchCnpjData } from './_lib/research-core.js'
 
 export const config = { maxDuration: 60 }
 

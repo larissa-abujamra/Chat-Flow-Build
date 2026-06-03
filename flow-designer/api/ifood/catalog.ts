@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { UUID_RE, ifoodPrice, type ResearchProduct } from '../_lib/research-core'
+import { UUID_RE, ifoodPrice, type ResearchProduct } from '../_lib/research-core.js'
 
 export const config = { maxDuration: 60 }
 
