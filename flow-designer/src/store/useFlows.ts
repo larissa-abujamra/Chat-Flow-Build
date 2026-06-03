@@ -507,20 +507,30 @@ const FLOW_C: FlowDefinition = {
   ],
 }
 
-const DEFAULTS: Record<FlowId, FlowDefinition> = {
+const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
   'flow-b': FLOW_B,
   'flow-c': FLOW_C,
 }
 
+function createEmptyFlow(id: string): FlowDefinition {
+  return {
+    id,
+    nome: 'Novo Fluxo',
+    scrapingEnabled: false,
+    nodes: [{ id: `${id}-start`, type: 'start', position: { x: 300, y: 200 }, data: { type: 'start' } }],
+    edges: [],
+  }
+}
+
 // ── localStorage fallback (used when Supabase is not configured) ─────────────
 
-function loadLocal(id: FlowId): FlowDefinition {
+function loadLocal(id: string): FlowDefinition {
   try {
     const raw = localStorage.getItem(`waz-flow-${id}`)
     if (raw) return { ...JSON.parse(raw) as FlowDefinition, id }
   } catch { /* ignore */ }
-  return DEFAULTS[id]
+  return DEFAULTS[id] ?? createEmptyFlow(id)
 }
 
 function saveLocal(flow: FlowDefinition) {
@@ -533,7 +543,7 @@ function saveLocal(flow: FlowDefinition) {
 
 export function useFlow(id: FlowId) {
   const [flow, setFlow] = useState<FlowDefinition>(() =>
-    supabase ? DEFAULTS[id] : loadLocal(id)
+    supabase ? (DEFAULTS[id] ?? createEmptyFlow(id)) : loadLocal(id)
   )
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Prevents applying a remote update that echoes back our own save
@@ -549,7 +559,7 @@ export function useFlow(id: FlowId) {
       .eq('id', id)
       .single()
       .then(({ data }) => {
-        setFlow(data ? { ...(data.data as FlowDefinition), id } : DEFAULTS[id])
+        setFlow(data ? { ...(data.data as FlowDefinition), id } : (DEFAULTS[id] ?? createEmptyFlow(id)))
       })
 
     // Real-time subscription
@@ -586,7 +596,7 @@ export function useFlow(id: FlowId) {
   }, [])
 
   const reset = useCallback(() => {
-    update(DEFAULTS[id])
+    update(DEFAULTS[id] ?? createEmptyFlow(id))
   }, [id, update])
 
   const exportJSON = useCallback(() => {
@@ -617,4 +627,36 @@ export function useFlow(id: FlowId) {
   }, [id, update])
 
   return { flow, update, reset, exportJSON, importJSON }
+}
+
+// ── Flow list (dynamic tabs) ──────────────────────────────────────────────────
+
+const DEFAULT_TABS = [
+  { id: 'flow-a', label: 'Fluxo A' },
+  { id: 'flow-b', label: 'Fluxo B' },
+  { id: 'flow-c', label: 'Fluxo C' },
+]
+
+export function useFlowList() {
+  const [extra, setExtra] = useState<{ id: string; label: string }[]>(() => {
+    try {
+      const raw = localStorage.getItem('waz-extra-flows')
+      if (raw) return JSON.parse(raw)
+    } catch { /* ignore */ }
+    return []
+  })
+
+  const tabs = [...DEFAULT_TABS, ...extra]
+
+  const addFlow = useCallback((): string => {
+    const id = `flow-${Date.now()}`
+    setExtra((prev) => {
+      const next = [...prev, { id, label: `Fluxo ${DEFAULT_TABS.length + prev.length + 1}` }]
+      try { localStorage.setItem('waz-extra-flows', JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+    return id
+  }, [])
+
+  return { tabs, addFlow }
 }

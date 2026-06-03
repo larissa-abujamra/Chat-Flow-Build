@@ -12,12 +12,18 @@ export default function App() {
       {!isPreview && <Navbar />}
       <Switch>
         <Route path="/" component={() => <Redirect to="/flow-a" />} />
-        <Route path="/flow-a" component={() => <FlowEditor flowId="flow-a" />} />
-        <Route path="/flow-b" component={() => <FlowEditor flowId="flow-b" />} />
-        <Route path="/flow-c" component={() => <FlowEditor flowId="flow-c" />} />
-        <Route path="/preview/flow-a" component={() => <PreviewPage flowId="flow-a" />} />
-        <Route path="/preview/flow-b" component={() => <PreviewPage flowId="flow-b" />} />
-        <Route path="/preview/flow-c" component={() => <PreviewPage flowId="flow-c" />} />
+        <Route path="/preview/:flowId">
+          {(params) => {
+            const id = params?.flowId ?? 'flow-a'
+            return <PreviewPage key={id} flowId={id} />
+          }}
+        </Route>
+        <Route path="/:flowId">
+          {(params) => {
+            const id = params?.flowId ?? 'flow-a'
+            return <FlowEditor key={id} flowId={id} />
+          }}
+        </Route>
         <Route component={() => <Redirect to="/flow-a" />} />
       </Switch>
     </div>

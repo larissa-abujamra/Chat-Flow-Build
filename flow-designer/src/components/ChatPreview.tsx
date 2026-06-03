@@ -462,10 +462,7 @@ export default function ChatPreview({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 bg-card/90 backdrop-blur-sm">
           <div className="flex items-center gap-2.5">
             <Orb size={34} />
-            <div>
-              <p className="text-sm font-semibold leading-none">Orbie</p>
-              <p className="text-[10px] text-green-500 font-medium mt-0.5">online agora</p>
-            </div>
+            <p className="text-sm font-semibold leading-none">Onboarding</p>
           </div>
           <button
             type="button"
@@ -488,10 +485,7 @@ export default function ChatPreview({
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2.5">
           <Orb size={32} />
-          <div>
-            <p className="text-sm font-semibold leading-none">Waz</p>
-            <p className="eyebrow mt-0.5">Preview do fluxo</p>
-          </div>
+          <p className="text-sm font-semibold leading-none">Onboarding</p>
         </div>
         <div className="flex items-center gap-0.5">
           {flowId && (

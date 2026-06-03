@@ -29,7 +29,7 @@ export interface FlowEdge {
   sourceHandle?: string
 }
 
-export type FlowId = 'flow-a' | 'flow-b' | 'flow-c'
+export type FlowId = string
 
 export interface FlowDefinition {
   id: FlowId
