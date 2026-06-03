@@ -136,7 +136,7 @@ type NodeId =
   | "instagram" | "instagram_edit" | "instagram_connecting"
   | "fulfillment" | "fulfillment_details" | "payment"
   | "tone_generated" | "tone_manual" | "tone_upload" | "tone_reading"
-  | "emojis" | "escalation" | "tasks" | "review" | "configured";
+  | "emojis" | "emojis_suggest" | "escalation" | "tasks" | "review" | "configured";
 
 type TextField =
   | "businessName" | "city" | "cnpj" | "site" | "instagram" | "setor" | "services"
@@ -471,6 +471,7 @@ const FLOW_NODES: FlowNodeDef[] = [
       { key: "emojis.opt_sempre", label: "Opção: sempre", default: "Sempre" },
       { key: "emojis.opt_asvezes", label: "Opção: às vezes", default: "Às vezes" },
       { key: "emojis.opt_nunca", label: "Opção: nunca", default: "Nunca" },
+      { key: "emojis.suggested", label: "Emojis sugeridos", default: "Boa! Pelo seu tom e seu negócio, esses combinam com vocês:" },
     ],
   },
   {
@@ -1353,6 +1354,7 @@ export function OnboardingPreview({
   const [carroChefe, setCarroChefe] = useState("");
   const [tone, setTone] = useState("");
   const [emoji, setEmoji] = useState("");
+  const [emojiSet, setEmojiSet] = useState<string[]>([]); // emojis sugeridos (sempre/às vezes)
   // Camada OPERACIONAL — o que o time de IA precisa pra realmente atender e cobrar.
   const [fulfillmentMode, setFulfillmentMode] = useState(""); // Entrega / Retirada / Entrega e retirada
   const [fulfillment, setFulfillment] = useState("");         // regras (bairros, taxa, mínimo, prazo)
@@ -1512,7 +1514,8 @@ export function OnboardingPreview({
     const t = v.trim().toLowerCase();
     if (t.length < 3) return false;
     if (t.endsWith("?")) return true;
-    return /^(o que|oq|qual|quais|quanto|quantos|quantas|quem|onde|aonde|quando|como|por que|por quê|porque|porquê|pra que|para que|cad[êe]|me (diz|explica|fala)|voc[êe] sabe|sabe me dizer)\b/.test(
+    // PT + EN: palavras interrogativas e pedidos comuns no começo da frase.
+    return /^(o que|oq|qual|quais|quanto|quantos|quantas|quem|onde|aonde|quando|como|por que|por quê|porque|porquê|pra que|para que|cad[êe]|me (diz|explica|fala|ajuda|conta)|voc[êe] (sabe|pode|consegue|é|tem)|sabe (me dizer|dizer)|what|where|when|who|why|how|which|whats|what's|can you|could you|do you|are you|tell me)\b/.test(
       t,
     );
   };
@@ -1534,6 +1537,61 @@ export function OnboardingPreview({
       return (json && typeof json.answer === "string" ? json.answer.trim() : "") || "";
     } catch {
       return "";
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Classifica se o TEXTO digitado responde à PERGUNTA atual, ou se é off-topic
+  // (outra pergunta, pedido aleatório, sem sentido). Fail-open: em erro/timeout
+  // devolve {offtopic:false} pra NUNCA travar uma resposta real do usuário.
+  const classifyAnswer = async (
+    question: string,
+    answer: string,
+  ): Promise<{ offtopic: boolean; reply: string }> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classify: { question, answer, business: businessNameRef.current.trim() } }),
+        signal: ctrl.signal,
+      });
+      const j = await r.json();
+      if (!r.ok) return { offtopic: false, reply: "" };
+      return { offtopic: j?.offtopic === true, reply: typeof j?.reply === "string" ? j.reply : "" };
+    } catch {
+      return { offtopic: false, reply: "" };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Sugere emojis que combinam com o tom de voz + tipo de negócio + bio do
+  // Instagram que descobrimos. Fail-open: erro/timeout → [] (sem sugestão).
+  const suggestEmojis = async (): Promise<string[]> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emojis: {
+            tom: research?.tom || tone || "",
+            business: businessNameRef.current.trim(),
+            bio: igData?.bio || "",
+            setor: setorRef.current || "",
+          },
+        }),
+        signal: ctrl.signal,
+      });
+      const j = await r.json();
+      const arr = Array.isArray(j?.emojis) ? j.emojis : [];
+      return arr.filter((e: unknown) => typeof e === "string" && e.trim()).slice(0, 10);
+    } catch {
+      return [];
     } finally {
       clearTimeout(timer);
     }
@@ -2146,16 +2204,11 @@ export function OnboardingPreview({
             if (!cancelled) advanceFrom("place_pick");
             break;
           }
-          // COLAPSO: um único candidato confiante → seleciona sozinho (menos
-          // toques). Com vários, mostra a lista pra escolher.
-          if (found.length === 1) {
-            await say(tx("place_pick.found"));
-            await wait(300);
-            if (!cancelled) handlePlacePick(found[0]);
-            break;
-          }
+          // Sempre mostra os resultados como BOTÕES pra o usuário escolher (nunca
+          // "responde sozinho" — auto-selecionar parecia uma resposta que o usuário
+          // não deu). Com mais de uma unidade, avisa que há várias.
           await say(tx("place_pick.found"));
-          await say(tx("place_pick.multi"));
+          if (found.length > 1) await say(tx("place_pick.multi"));
           if (!cancelled) setPending({ kind: "placePick" });
           break;
         }
@@ -2568,12 +2621,26 @@ export function OnboardingPreview({
             setPending({
               kind: "choice",
               options: [
-                { label: tx("emojis.opt_sempre"), value: "sempre", next: "__advance__", set: () => setEmoji("Sempre") },
-                { label: tx("emojis.opt_asvezes"), value: "asvezes", next: "__advance__", set: () => setEmoji("Às vezes") },
-                { label: tx("emojis.opt_nunca"), value: "nunca", next: "__advance__", set: () => setEmoji("Nunca") },
+                // sempre/às vezes → sugere emojis que combinam com o tom/negócio.
+                { label: tx("emojis.opt_sempre"), value: "sempre", next: "emojis_suggest", set: () => setEmoji("Sempre") },
+                { label: tx("emojis.opt_asvezes"), value: "asvezes", next: "emojis_suggest", set: () => setEmoji("Às vezes") },
+                { label: tx("emojis.opt_nunca"), value: "nunca", next: "__advance__", set: () => { setEmoji("Nunca"); setEmojiSet([]); } },
               ],
             });
           break;
+        case "emojis_suggest": {
+          // Transiente: sugere emojis relevantes ao tom/negócio/Instagram que
+          // achamos, mostra e segue. advanceFrom("emojis") → review.
+          const set = await suggestEmojis();
+          if (cancelled) return;
+          if (set.length) {
+            setEmojiSet(set);
+            await say(`${tx("emojis.suggested")} ${set.join(" ")}`);
+          }
+          await wait(450);
+          if (!cancelled) advanceFrom("emojis");
+          break;
+        }
         case "escalation": {
           // OPERACIONAL: pra quem o agente passa quando não resolve (autonomia segura).
           await say(tx("escalation.msg"));
@@ -2660,6 +2727,7 @@ export function OnboardingPreview({
       ifood: ifoodFound ? { nome: ifoodFound.nome, url: ifoodFound.url, id: ifoodFound.id || null } : null,
       tom: tone,
       emoji,
+      emojisSugeridos: emojiSet,
       tipoNegocio: bizTypeState,
       // camada operacional — o que o time precisa pra atender/cobrar/operar
       entrega: { modo: fulfillmentMode, regras: fulfillment },
@@ -2673,7 +2741,7 @@ export function OnboardingPreview({
     } catch {
       /* ambiente sem localStorage — ignora */
     }
-  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, tone, emoji, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
+  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
 
   /* handlers */
   const handleChoice = (opt: Choice) => {
@@ -2773,20 +2841,61 @@ export function OnboardingPreview({
     addUser(s);
     advanceFrom("carro_chefe");
   };
+  // Campos de texto livre onde "qualquer coisa parece resposta" → passam pelo
+  // classificador de off-topic antes de consumir. Os demais (cnpj/site/@/link
+  // iFood/serviços) têm validação própria e não precisam.
+  const GATED_FIELDS = new Set(["businessName", "city", "fulfillmentDetails"]);
+
   const submitText = () => {
     if (!pending || pending.kind !== "textInput") return;
     const v = textDraft.trim();
     if (!v) return;
-    // Pergunta paralela ("qual a capital do Brasil?") → responde e re-pergunta,
-    // sem consumir o campo. O CNPJ é só dígitos, então nunca cai aqui.
-    if (pending.field !== "cnpj" && looksLikeSideQuestion(v)) {
+    const field = pending.field;
+    // 1) Pergunta paralela óbvia ("qual a capital da Finlândia?") → responde já
+    //    (instantâneo, sem LLM) e re-pergunta, sem consumir o campo.
+    if (field !== "cnpj" && looksLikeSideQuestion(v)) {
       void answerSideQuestion(v);
       return;
     }
-    const field = pending.field;
-    setPending(null);
-    addUser(v);
+    // 2) Campos de texto livre → classifica antes de aceitar (entende bobagem/
+    //    off-topic mesmo sem "?", ex.: "what is the capital of finland").
+    if (GATED_FIELDS.has(field)) {
+      void gateThenConsume(field, v);
+      return;
+    }
+    // 3) Demais campos → consome direto.
+    consumeText(field, v, false);
+  };
+
+  // Mostra a resposta, classifica; se off-topic → responde e re-pergunta (sem
+  // consumir); se válida → consome normalmente. Fail-open via classifyAnswer.
+  const gateThenConsume = async (field: string, v: string) => {
+    const lastQuestion =
+      [...chat].reverse().find((m) => m.sender === "oddy" && m.kind === "text")?.text || "";
     setTextDraft("");
+    addUser(v);
+    setTyping(true);
+    const cls = await classifyAnswer(lastQuestion, v);
+    setTyping(false);
+    if (cls.offtopic) {
+      addOddy(cls.reply || "Hmm, não entendi muito bem 🙂");
+      if (lastQuestion) {
+        await new Promise((r) => setTimeout(r, 450));
+        addOddy(lastQuestion);
+      }
+      return; // pending segue o mesmo textInput → usuário responde de novo
+    }
+    consumeText(field, v, true);
+  };
+
+  // Consome a resposta de um campo de texto. alreadyShown=true quando o balão do
+  // usuário já apareceu (pelo gate de off-topic).
+  const consumeText = (field: string, v: string, alreadyShown: boolean) => {
+    setPending(null);
+    if (!alreadyShown) {
+      addUser(v);
+      setTextDraft("");
+    }
     if (field === "businessName") {
       setBusinessName(v);
       businessNameRef.current = v;
@@ -2945,7 +3054,7 @@ export function OnboardingPreview({
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
-    setCarroChefe(""); setTone(""); setEmoji("");
+    setCarroChefe(""); setTone(""); setEmoji(""); setEmojiSet([]);
     setFulfillmentMode(""); fulfillmentModeRef.current = "";
     setFulfillment(""); setPayment(""); setEscalation("");
     setTasks([]); setTaskSel([]);
@@ -3080,7 +3189,7 @@ export function OnboardingPreview({
         { label: "Carro-chefe", value: carroChefe },
         { label: "Entrega", value: [fulfillmentMode, fulfillment].filter(Boolean).join(" — ") },
         { label: "Pagamento", value: payment },
-        { label: "Tom de voz", value: [tone, emoji && `emojis: ${emoji}`].filter(Boolean).join(" · ") },
+        { label: "Tom de voz", value: [tone, emoji && `emojis: ${emoji}`, emojiSet.length ? emojiSet.join(" ") : ""].filter(Boolean).join(" · ") },
         { label: "Falar com humano", value: escalation },
         { label: "Vou começar", value: tasks.length ? `${tasks.length} tarefa${tasks.length > 1 ? "s" : ""}` : "" },
       ].filter((r) => r.value && r.value.trim());

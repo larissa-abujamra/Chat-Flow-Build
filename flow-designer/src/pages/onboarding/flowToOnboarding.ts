@@ -15,8 +15,6 @@ const STEP_TEXT_KEY: Record<string, { message?: string; question?: string }> = {
   fulfillment: { question: 'fulfillment.msg' },
   tone_generated: { question: 'tone_generated.found' },
   emojis: { question: 'emojis.msg' },
-  escalation: { question: 'escalation.msg' },
-  tasks: { question: 'tasks.msg' },
   review: { message: 'review.msg' },
   configured: { message: 'configured.l1' },
 }
