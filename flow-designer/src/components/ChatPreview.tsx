@@ -8,25 +8,18 @@ import {
   Instagram,
   Mic,
   Settings,
-  Zap,
   Send,
   Smartphone,
+  CheckCircle2,
 } from 'lucide-react'
 import type { FlowDefinition, FlowNode, ActionKind, OpcaoItem, FlowId } from '@/types'
 import { Button } from './ui/button'
 
 // ── Orb ──────────────────────────────────────────────────────────────────────
+// Same animated gradient orb as the OnboardingPreview wizard (.orb in index.css).
 
 export function Orb({ size = 36 }: { size?: number }) {
-  return (
-    <img
-      src="/orbe.png"
-      alt="Orbe"
-      width={size}
-      height={size}
-      style={{ flexShrink: 0, borderRadius: '50%', objectFit: 'cover' }}
-    />
-  )
+  return <div className="orb shrink-0" style={{ width: size, height: size }} aria-hidden />
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -163,13 +156,6 @@ const ACTION_ICON: Record<ActionKind, React.ReactNode> = {
   'conectar-instagram': <Instagram className="w-3.5 h-3.5" />,
   'gerar-tom': <Mic className="w-3.5 h-3.5" />,
   custom: <Settings className="w-3.5 h-3.5" />,
-}
-
-// ── Background style ──────────────────────────────────────────────────────────
-
-const CHAT_BG: React.CSSProperties = {
-  background:
-    'linear-gradient(180deg, rgba(251,113,133,0.07) 0%, rgba(34,197,94,0.05) 36%, rgba(59,130,246,0.05) 72%, transparent 100%)',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -368,27 +354,36 @@ export default function ChatPreview({
   const renderItem = (item: ChatItem, i: number) => {
     if (item.kind === 'bot') {
       return (
-        <div key={i} className="flex items-end gap-2">
-          <div className={`max-w-[84%] px-3.5 py-2.5 rounded-2xl rounded-tl-sm text-sm bg-card border border-border text-foreground shadow-sm whitespace-pre-wrap ${item.text ? '' : 'italic text-muted-foreground'}`}>
+        <div key={i} className="flex chat-enter justify-start items-end gap-2">
+          <Orb size={30} />
+          <div className={`px-4 py-2.5 text-[15px] leading-relaxed max-w-[78%] bg-[#F4F5F8] text-[#13161D] rounded-2xl rounded-tl-md whitespace-pre-wrap ${item.text ? '' : 'italic text-gray-400'}`}>
             {item.text ? subst(item.text) : '(mensagem vazia)'}
           </div>
         </div>
       )
     }
     if (item.kind === 'action') {
+      // Status widget — matches the OnboardingPreview's in-chat step cards.
       return (
-        <div key={i} className="flex items-end gap-2">
-          <div className="max-w-[84%] px-3 py-2 rounded-2xl rounded-tl-sm text-xs bg-fin/10 border border-fin/20 text-fin flex items-center gap-1.5">
-            {ACTION_ICON[item.actionKind]}
-            <span className="font-medium">{item.label || item.actionKind}</span>
+        <div key={i} className="flex chat-enter justify-start items-end gap-2">
+          <div className="w-[30px] shrink-0" />
+          <div className="max-w-[85%] rounded-2xl border border-gray-200 bg-white px-4 py-3 flex items-center gap-3 shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-[#F4F5F8] flex items-center justify-center text-[#13161D] shrink-0">
+              {ACTION_ICON[item.actionKind]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#13161D] leading-tight truncate">{item.label || item.actionKind}</p>
+              <p className="text-xs text-gray-500 mt-0.5">rodando em segundo plano</p>
+            </div>
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
           </div>
         </div>
       )
     }
     if (item.kind === 'user') {
       return (
-        <div key={i} className="flex justify-end">
-          <div className="max-w-[84%] px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm bg-primary text-primary-foreground shadow-sm">
+        <div key={i} className="flex chat-enter justify-end">
+          <div className="px-4 py-2.5 text-[15px] leading-relaxed max-w-[78%] bg-[#13161D] text-white rounded-2xl rounded-tr-md whitespace-pre-wrap">
             {item.text}
           </div>
         </div>
@@ -400,7 +395,7 @@ export default function ChatPreview({
   const inputBar = waitingForInput && (
     <form
       onSubmit={(e) => { e.preventDefault(); handleTextSubmit(inputText) }}
-      className="px-3 py-2.5 border-t border-border bg-card/80 backdrop-blur-sm shrink-0 flex items-center gap-2"
+      className="px-5 py-4 border-t border-gray-100 bg-white shrink-0 flex items-center gap-2"
     >
       <input
         ref={inputRef}
@@ -408,14 +403,14 @@ export default function ChatPreview({
         value={inputText}
         onChange={(e) => setInputText(e.target.value)}
         placeholder="Digite sua resposta…"
-        className="flex-1 rounded-full border border-border bg-background px-3.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        className="flex-1 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-[#13161D] focus:outline-none focus:border-[#13161D] transition-colors"
       />
       <button
         type="submit"
         disabled={!inputText.trim()}
-        className="w-8 h-8 rounded-full flex items-center justify-center bg-primary text-primary-foreground disabled:opacity-40 transition-opacity shrink-0"
+        className="w-10 h-10 rounded-2xl flex items-center justify-center bg-[#13161D] text-white hover:bg-[#06070A] disabled:opacity-40 transition-all shrink-0"
       >
-        <Send className="w-3.5 h-3.5" />
+        <Send className="w-4 h-4" />
       </button>
     </form>
   )
@@ -423,40 +418,46 @@ export default function ChatPreview({
   const messagesArea = (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-secondary/30"
-      style={CHAT_BG}
+      className="flex-1 overflow-y-auto px-5 py-6 space-y-4 bg-white"
     >
       {!started && !standalone && (
-        <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
+        <div className="flex flex-col items-center justify-center h-full text-center space-y-5 py-12">
           <Orb size={56} />
-          <p className="text-sm text-muted-foreground max-w-[180px]">
+          <p className="text-sm text-gray-500 max-w-[200px]">
             Visualize o fluxo como conversa real
           </p>
-          <Button variant="waz" onClick={start}>
+          <button
+            onClick={start}
+            className="inline-flex items-center justify-center gap-2 rounded-full font-medium h-11 px-6 bg-[#13161D] text-white hover:bg-[#06070A] hover:-translate-y-0.5 transition-all"
+          >
             Iniciar preview
-          </Button>
+          </button>
         </div>
       )}
 
       {state.visibleItems.map(renderItem)}
 
       {isTyping && (
-        <div className="flex items-end gap-2">
-          <div className="px-3.5 py-2.5 bg-card border border-border rounded-2xl rounded-tl-sm flex items-center gap-1.5 shadow-sm">
+        <div className="flex items-end gap-2 chat-enter">
+          <Orb size={30} />
+          <div className="bg-[#F4F5F8] rounded-2xl rounded-tl-md px-4 py-3 flex items-center gap-1">
             <span className="sr-only">digitando</span>
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-            <span className="typing-dot" />
+            <span className="typing-dot w-2 h-2 rounded-full bg-gray-400 inline-block" />
+            <span className="typing-dot w-2 h-2 rounded-full bg-gray-400 inline-block" />
+            <span className="typing-dot w-2 h-2 rounded-full bg-gray-400 inline-block" />
           </div>
         </div>
       )}
 
       {done && (
-        <div className="flex flex-col items-center pt-4 border-t border-border space-y-3">
-          <p className="text-xs text-muted-foreground">Conversa encerrada</p>
-          <Button variant="outline" size="sm" onClick={restart}>
+        <div className="flex flex-col items-center pt-4 space-y-3">
+          <p className="text-xs text-gray-500">Conversa encerrada</p>
+          <button
+            onClick={restart}
+            className="inline-flex items-center justify-center gap-2 rounded-full font-medium h-10 px-5 bg-white text-[#13161D] border border-gray-200 hover:bg-[#F4F5F8] transition-all"
+          >
             <RotateCcw className="w-3.5 h-3.5" /> Reiniciar
-          </Button>
+          </button>
         </div>
       )}
     </div>
@@ -481,19 +482,22 @@ export default function ChatPreview({
   // ── Standalone (iPhone) ───────────────────────────────────────────────────────
   if (standalone) {
     return (
-      <div className="flex flex-col h-full bg-card">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 bg-card/90 backdrop-blur-sm">
-          <div className="flex items-center gap-2.5">
-            <Orb size={34} />
-            <p className="text-sm font-semibold leading-none">Onboarding</p>
+      <div className="flex flex-col h-full bg-white">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0 bg-white">
+          <Orb size={42} />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[#13161D] leading-tight">Assistente Squad</p>
+            <p className="text-xs text-gray-500 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Online agora
+            </p>
           </div>
           <button
             type="button"
             onClick={restart}
-            className="text-muted-foreground hover:text-foreground transition-colors p-1"
+            className="text-gray-300 hover:text-[#13161D] transition-colors p-1"
             title="Reiniciar"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-5 h-5" />
           </button>
         </div>
         {messagesArea}
@@ -504,18 +508,21 @@ export default function ChatPreview({
 
   // ── Panel (default) ───────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-card border-l border-border" style={{ width: 340 }}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-2.5">
-          <Orb size={32} />
-          <p className="text-sm font-semibold leading-none">Onboarding</p>
+    <div className="flex flex-col h-full bg-white border-l border-border" style={{ width: 360 }}>
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
+        <Orb size={40} />
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-[#13161D] leading-tight">Assistente Squad</p>
+          <p className="text-xs text-gray-500 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Online agora
+          </p>
         </div>
         <div className="flex items-center gap-0.5">
           {flowId && (
             <Link href={`/preview/${flowId}`}>
               <span
                 role="button"
-                className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                className="flex items-center justify-center w-8 h-8 rounded-md text-gray-400 hover:text-[#13161D] hover:bg-[#F4F5F8] transition-colors cursor-pointer"
                 title="Ver no iPhone"
               >
                 <Smartphone className="w-4 h-4" />
