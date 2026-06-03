@@ -11,6 +11,7 @@ import {
   Send,
   Smartphone,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 import type { FlowDefinition, FlowNode, ActionKind, OpcaoItem, FlowId } from '@/types'
 import { Button } from './ui/button'
@@ -35,6 +36,10 @@ interface PreviewState {
   currentNodeId: string | null
   pendingWaitingForInput: boolean
   pendingDone: boolean
+  // When the walk stops at an action node, it awaits a live /api call before
+  // continuing from `resumeAfterAction`.
+  pendingActionId: string | null
+  resumeAfterAction: string | null
 }
 
 const EMPTY: PreviewState = {
@@ -43,6 +48,8 @@ const EMPTY: PreviewState = {
   currentNodeId: null,
   pendingWaitingForInput: false,
   pendingDone: false,
+  pendingActionId: null,
+  resumeAfterAction: null,
 }
 
 // ── Matching ──────────────────────────────────────────────────────────────────
@@ -93,7 +100,14 @@ function nextNode(flow: FlowDefinition, nodeId: string, sourceHandle?: string): 
   return edge ? (flow.nodes.find((n) => n.id === edge.target) ?? null) : null
 }
 
-type WalkResult = { items: ChatItem[]; currentNodeId: string | null; waitingForInput: boolean; done: boolean }
+type WalkResult = {
+  items: ChatItem[]
+  currentNodeId: string | null
+  waitingForInput: boolean
+  done: boolean
+  actionId?: string | null
+  resumeId?: string | null
+}
 
 function walkForward(
   flow: FlowDefinition,
@@ -124,9 +138,11 @@ function walkForward(
       return { items, currentNodeId: node.id, waitingForInput: true, done: false }
     }
     if (data.type === 'action') {
+      // Stop at the action so the caller can run its live /api call, then resume
+      // the walk from the node after it.
       items.push({ kind: 'action', actionKind: data.kind, label: data.label, nodeId: node.id })
-      nodeId = nextNode(flow, node.id)?.id ?? null
-      continue
+      const after = nextNode(flow, node.id)?.id ?? null
+      return { items, currentNodeId: node.id, waitingForInput: false, done: false, actionId: node.id, resumeId: after }
     }
     if (data.type === 'end') {
       if (data.texto) {
@@ -139,6 +155,65 @@ function walkForward(
     break
   }
   return { items, currentNodeId: nodeId, waitingForInput: false, done: false }
+}
+
+// ── Live enrichment (action nodes call the real /api endpoints) ───────────────
+
+async function postJson(url: string, body: unknown): Promise<Record<string, unknown>> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${url} ${res.status}`)
+  return (await res.json()) as Record<string, unknown>
+}
+
+const s = (v: unknown) => (v == null ? '' : String(v))
+
+/**
+ * Runs the /api endpoint named in an action node's label, using the values the
+ * user has typed so far ({negocio}, {cidade}, …), and returns new vars to merge
+ * (real {endereco}, {telefone}, {site}, {instagram}). Fails soft to {} when the
+ * API is unavailable (e.g. `vite dev` has no functions) so the flow continues.
+ */
+async function runAction(label: string, vars: Record<string, string>): Promise<Record<string, string>> {
+  const endpoint = (label.match(/\/api\/[a-z/-]+/) || [])[0]
+  try {
+    if (endpoint === '/api/places') {
+      const d = await postJson('/api/places', { business: vars.negocio || '', city: vars.cidade || '' })
+      const c = (Array.isArray(d.candidatos) ? d.candidatos[0] : null) as Record<string, unknown> | null
+      // Always return the keys (even empty) so the call succeeding never leaves
+      // a literal {endereco} on screen.
+      return { endereco: s(c?.endereco), telefone: s(c?.telefone), site: s(c?.site), horario: s(c?.horario) }
+    } else if (endpoint === '/api/site-scrape') {
+      if (vars.site) {
+        const d = await postJson('/api/site-scrape', { business: vars.negocio || '', site: vars.site })
+        const out: Record<string, string> = { instagram: s(d.instagram) }
+        if (d.telefone && !vars.telefone) out.telefone = s(d.telefone)
+        return out
+      }
+      return { instagram: '' }
+    } else if (endpoint === '/api/instagram') {
+      const handle = (vars.instagram || '')
+        .replace(/^@/, '')
+        .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+        .replace(/\/.*$/, '')
+        .trim()
+      if (handle) {
+        const d = await postJson('/api/instagram', { username: handle })
+        if (d.encontrado) {
+          return {
+            instagram: '@' + s(d.username || handle),
+            instagram_seguidores: s(d.seguidores),
+          }
+        }
+      }
+    }
+  } catch {
+    /* no API in dev, or provider error — flow continues with placeholders */
+  }
+  return {}
 }
 
 // ── Typing delay ──────────────────────────────────────────────────────────────
@@ -182,10 +257,20 @@ export default function ChatPreview({
   // Values the user typed, keyed by each question's `salvarComo`. Used to fill
   // {placeholders} in later messages so the preview reads like the real chat.
   const [vars, setVars] = useState<Record<string, string>>({})
+  // Mirror of `vars` for use inside async callbacks (avoids stale closures).
+  const varsRef = useRef<Record<string, string>>({})
+  const [fetchingActionId, setFetchingActionId] = useState<string | null>(null)
+  const fetchingRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const processingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Capture vars + mirror into the ref in one place.
+  const mergeVars = useCallback((patch: Record<string, string>) => {
+    varsRef.current = { ...varsRef.current, ...patch }
+    setVars(varsRef.current)
+  }, [])
 
   const notifyActive = useCallback(
     (nodeId: string | null) => onActiveNodeChange?.(nodeId),
@@ -232,6 +317,38 @@ export default function ChatPreview({
     }
   }, [state.pendingItems])
 
+  // ── Run the live /api call when the walk stops at an action node ─────────────
+  useEffect(() => {
+    if (state.pendingItems.length > 0) return // wait until the action item is shown
+    if (!state.pendingActionId || fetchingRef.current) return
+    const actionNode = flow.nodes.find((n) => n.id === state.pendingActionId)
+    if (!actionNode || actionNode.data.type !== 'action') return
+
+    fetchingRef.current = true
+    setFetchingActionId(state.pendingActionId)
+    const resumeId = state.resumeAfterAction
+    const baseVisible = state.visibleItems
+
+    runAction(actionNode.data.label, varsRef.current).then((patch) => {
+      if (Object.keys(patch).length) mergeVars(patch)
+      fetchingRef.current = false
+      setFetchingActionId(null)
+      const result: WalkResult = resumeId
+        ? walkForward(flow, resumeId, baseVisible)
+        : { items: baseVisible, currentNodeId: null, waitingForInput: false, done: true }
+      setState({
+        visibleItems: baseVisible,
+        pendingItems: result.items.slice(baseVisible.length),
+        currentNodeId: result.currentNodeId,
+        pendingWaitingForInput: result.waitingForInput,
+        pendingDone: result.done,
+        pendingActionId: result.actionId ?? null,
+        resumeAfterAction: result.resumeId ?? null,
+      })
+      notifyActive(result.currentNodeId)
+    })
+  }, [state.pendingItems.length, state.pendingActionId, state.resumeAfterAction, state.visibleItems, flow, mergeVars, notifyActive])
+
   // Notify active node once all pending items are revealed
   useEffect(() => {
     if (waitingForInput) notifyActive(state.currentNodeId)
@@ -261,6 +378,8 @@ export default function ChatPreview({
       currentNodeId: result.currentNodeId,
       pendingWaitingForInput: result.waitingForInput,
       pendingDone: result.done,
+      pendingActionId: result.actionId ?? null,
+      resumeAfterAction: result.resumeId ?? null,
     })
     setStarted(true)
   }, [flow])
@@ -282,8 +401,7 @@ export default function ChatPreview({
       // Capture this answer under the question's variable so later {placeholders}
       // can be filled with what the user actually typed.
       if (node.data.salvarComo) {
-        const key = node.data.salvarComo
-        setVars((v) => ({ ...v, [key]: trimmed }))
+        mergeVars({ [node.data.salvarComo]: trimmed })
       }
 
       // The input bar only renders when the preview is idle (no pending items),
@@ -324,6 +442,8 @@ export default function ChatPreview({
         currentNodeId: result.currentNodeId,
         pendingWaitingForInput: result.waitingForInput,
         pendingDone: result.done,
+        pendingActionId: result.actionId ?? null,
+        resumeAfterAction: result.resumeId ?? null,
       })
       notifyActive(result.currentNodeId)
     },
@@ -333,9 +453,12 @@ export default function ChatPreview({
   const restart = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
     processingRef.current = false
+    fetchingRef.current = false
+    setFetchingActionId(null)
     setIsTyping(false)
     setStarted(false)
     setInputText('')
+    varsRef.current = {}
     setVars({})
     setState(EMPTY)
     notifyActive(null)
@@ -364,6 +487,8 @@ export default function ChatPreview({
     }
     if (item.kind === 'action') {
       // Status widget — matches the OnboardingPreview's in-chat step cards.
+      // Shows a spinner while its live /api call runs, then a green check.
+      const isFetching = fetchingActionId === item.nodeId
       return (
         <div key={i} className="flex chat-enter justify-start items-end gap-2">
           <div className="w-[30px] shrink-0" />
@@ -373,9 +498,11 @@ export default function ChatPreview({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[#13161D] leading-tight truncate">{item.label || item.actionKind}</p>
-              <p className="text-xs text-gray-500 mt-0.5">rodando em segundo plano</p>
+              <p className="text-xs text-gray-500 mt-0.5">{isFetching ? 'buscando dados reais…' : 'concluído'}</p>
             </div>
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+            {isFetching
+              ? <Loader2 className="w-5 h-5 text-[#13161D] animate-spin shrink-0" />
+              : <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
           </div>
         </div>
       )

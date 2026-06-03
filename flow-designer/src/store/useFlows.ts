@@ -742,7 +742,12 @@ const FLOW_STEFANO: FlowDefinition = withStepIds(FLOW_STEFANO_BASE, FS_STEP_MAP)
 // experiência ao vivo (/onboarding) chama. Usa os 4 kinds existentes (mesma
 // convenção do Fluxo Stefano). Placeholders {nome}/{negocio}/{cidade}/{site}
 // são literais no preview de design; o wizard ao vivo substitui pelos valores.
-const FLOW_FINAL_BASE: FlowDefinition = {
+// Flow Final — runs as the scripted node-walker preview (ChatPreview), faithful
+// to this exact script. Its action nodes call the real /api endpoints live, so
+// {endereco}/{telefone}/{site}/{instagram} below are filled with real data for
+// the business the user types (see ChatPreview runAction). {nome}/{negocio}/
+// {cidade} come from the answers via `salvarComo`.
+const FLOW_FINAL: FlowDefinition = {
   id: 'flow-final',
   nome: 'Flow Final - Squad',
   scrapingEnabled: true,
@@ -822,10 +827,10 @@ const FLOW_FINAL_BASE: FlowDefinition = {
       position: { x: 300, y: 1660 },
       data: {
         type: 'question',
-        texto: 'Achei esses resultados. Qual é o seu?',
+        texto: 'Achei esses resultados. Qual é o seu?\n\n📍 {negocio} — {endereco}',
         opcoes: [
-          { id: 'ff-q-resultado-r1', label: '1 · Pinheiros' },
-          { id: 'ff-q-resultado-r2', label: '2 · Vila Madalena' },
+          { id: 'ff-q-resultado-r1', label: 'É esse' },
+          { id: 'ff-q-resultado-r2', label: 'Outro' },
           { id: 'ff-q-resultado-r3', label: 'Nenhum desses' },
         ],
       },
@@ -836,7 +841,8 @@ const FLOW_FINAL_BASE: FlowDefinition = {
       position: { x: 300, y: 1900 },
       data: {
         type: 'question',
-        texto: 'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:',
+        texto:
+          'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:\n\n📍 {endereco}\n📞 {telefone}',
         opcoes: [{ id: 'ff-q-endereco-r1', label: 'Está tudo certo' }],
       },
     },
@@ -847,7 +853,7 @@ const FLOW_FINAL_BASE: FlowDefinition = {
       data: {
         type: 'question',
         texto:
-          'Achei o site do {negocio}. É esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
+          'Achei o site do {negocio}: {site}\n\nÉ esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
         opcoes: [{ id: 'ff-q-site-r1', label: 'Sim' }],
       },
     },
@@ -869,7 +875,7 @@ const FLOW_FINAL_BASE: FlowDefinition = {
       position: { x: 300, y: 2660 },
       data: {
         type: 'question',
-        texto: 'Encontrei esse Instagram aqui, seria seu?',
+        texto: 'Encontrei esse Instagram aqui, seria seu?\n\n{instagram}',
         opcoes: [{ id: 'ff-q-instagram-r1', label: 'Sim' }],
       },
     },
@@ -1043,30 +1049,6 @@ const FLOW_FINAL_BASE: FlowDefinition = {
     { id: 'ff-e32', source: 'ff-msg-testar', target: 'ff-end' },
   ],
 }
-
-// Liga os nós do Flow Final às etapas do onboarding real → fluxo adaptativo: o
-// wizard roda com DADOS AO VIVO (Places/CNPJ/Instagram/iFood/catálogo/tom) do
-// negócio que o usuário digitar, reformado pela ordem/textos do Flow Final. Os
-// nós extras do Flow Final (boas-vindas, anexar PDF, horários, entrega, prazo,
-// "mais info") não têm etapa equivalente no wizard e são ignorados aqui.
-const FF_STEP_MAP: Record<string, string> = {
-  'ff-msg-welcome': 'welcome',
-  'ff-q-empresa': 'welcome',
-  'ff-q-cidade': 'ask_city',
-  'ff-q-resultado': 'place_pick',
-  'ff-q-endereco': 'confirm_contact',
-  'ff-q-site': 'confirm_site',
-  'ff-q-instagram': 'instagram',
-  'ff-act-redes': 'ifood',
-  'ff-act-ocr': 'catalog',
-  'ff-q-produto': 'carro_chefe',
-  'ff-act-tom': 'tone_generated',
-  'ff-q-tom': 'tone_generated',
-  'ff-msg-testar': 'configured',
-  'ff-end': 'features',
-}
-
-const FLOW_FINAL: FlowDefinition = withStepIds(FLOW_FINAL_BASE, FF_STEP_MAP)
 
 const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
