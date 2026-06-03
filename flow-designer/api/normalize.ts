@@ -19,9 +19,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Sugere emojis que combinam com o tom de voz + tipo de negócio + bio do
     // Instagram. Usado quando o lojista escolhe usar emojis "sempre/às vezes".
     const emojisReq = (body as Record<string, unknown>).emojis as
-      | { tom?: string; business?: string; bio?: string; setor?: string }
+      | { tom?: string; business?: string; bio?: string; setor?: string; avoid?: unknown }
       | undefined;
     if (emojisReq && typeof emojisReq === "object") {
+      const avoid = Array.isArray(emojisReq.avoid)
+        ? (emojisReq.avoid as unknown[]).filter((e) => typeof e === "string").slice(0, 40)
+        : [];
       const eKey = process.env.OPENROUTER_API_KEY;
       if (!eKey) { res.status(200).json({ emojis: [] }); return; }
       try {
@@ -37,6 +40,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 content:
                   "Sugira de 6 a 10 emojis que combinem com a MARCA: use o tom de voz, o ramo do negócio e a bio do Instagram fornecidos. " +
                   "Escolha emojis que o negócio realmente usaria no atendimento (produtos, clima, setor). Sem repetir. " +
+                  (avoid.length
+                    ? `NÃO use nenhum destes (já foram sugeridos): ${avoid.join(" ")}. Traga um conjunto DIFERENTE. `
+                    : "") +
                   "Responda SOMENTE JSON: {\"emojis\":[\"🍫\",\"🧁\", ...]}.",
               },
               {
@@ -55,7 +61,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const eData: any = await eRes.json();
         const parsed = extractJson(eData?.choices?.[0]?.message?.content || "");
         const list = Array.isArray(parsed.emojis) ? parsed.emojis : [];
-        res.status(200).json({ emojis: list.filter((e: unknown) => typeof e === "string").slice(0, 10) });
+        // normaliza removendo o seletor de variação (U+FE0F) — senão "🍫" e "🍫️"
+        // contam como diferentes e emojis repetidos passam pelo filtro de "avoid".
+        const stripVS = (s: string) => s.replace(/️/g, "");
+        const avoidSet = new Set(avoid.map(stripVS));
+        res.status(200).json({
+          emojis: list
+            .filter((e: unknown) => typeof e === "string" && !avoidSet.has(stripVS(e as string)))
+            .slice(0, 10),
+        });
         return;
       } catch {
         res.status(200).json({ emojis: [] }); return;

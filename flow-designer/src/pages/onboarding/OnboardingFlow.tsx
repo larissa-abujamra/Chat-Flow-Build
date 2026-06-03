@@ -173,6 +173,7 @@ type Pending =
   | { kind: "toneManual" }
   | { kind: "toneUpload" }
   | { kind: "multiChoice"; field: "tasks"; options: MultiOption[]; cta: string }
+  | { kind: "emojiConfirm" }
   | { kind: "textInput"; field: string; placeholder: string }
   | { kind: "finish" };
 
@@ -468,7 +469,12 @@ const FLOW_NODES: FlowNodeDef[] = [
     kind: "Mensagem",
     fields: [
       // Não há pergunta: deduzimos os emojis pelo tom/negócio e mostramos.
-      { key: "emojis.suggested", label: "Emojis sugeridos", default: "Boa! Pelo seu tom e seu negócio, vou usar emojis assim:" },
+      { key: "emojis.suggested", label: "Emojis sugeridos", default: "Boa! Pelo seu tom e seu negócio, esses combinam com vocês:" },
+      { key: "emojis.confirm", label: "Confirmação", default: "São esses?" },
+      { key: "emojis.opt_ok", label: "Opção: perfeito", default: "Perfeito, são esses" },
+      { key: "emojis.opt_more", label: "Opção: quero outros", default: "Quero outros" },
+      { key: "emojis.more", label: "Outras sugestões", default: "Sem problema! Que tal esses:" },
+      { key: "emojis.more_none", label: "Sem mais opções", default: "Não achei outros diferentes agora — seguimos com os anteriores. 🙂" },
     ],
   },
   {
@@ -1353,7 +1359,8 @@ export function OnboardingPreview({
   const [carroChefe, setCarroChefe] = useState("");
   const [tone, setTone] = useState("");
   const [emoji, setEmoji] = useState("");
-  const [emojiSet, setEmojiSet] = useState<string[]>([]); // emojis sugeridos (sempre/às vezes)
+  const [emojiSet, setEmojiSet] = useState<string[]>([]); // emojis sugeridos (confirmados)
+  const seenEmojisRef = useRef<string[]>([]); // emojis já sugeridos (p/ "quero outros" não repetir)
   // Camada OPERACIONAL — o que o time de IA precisa pra realmente atender e cobrar.
   const [fulfillmentMode, setFulfillmentMode] = useState(""); // Entrega / Retirada / Entrega e retirada
   const [fulfillment, setFulfillment] = useState("");         // regras (bairros, taxa, mínimo, prazo)
@@ -1569,7 +1576,7 @@ export function OnboardingPreview({
 
   // Sugere emojis que combinam com o tom de voz + tipo de negócio + bio do
   // Instagram que descobrimos. Fail-open: erro/timeout → [] (sem sugestão).
-  const suggestEmojis = async (): Promise<string[]> => {
+  const suggestEmojis = async (avoid: string[] = []): Promise<string[]> => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 6000);
     try {
@@ -1582,13 +1589,20 @@ export function OnboardingPreview({
             business: businessNameRef.current.trim(),
             bio: igData?.bio || "",
             setor: setorRef.current || "",
+            avoid, // "quero outros" → não repetir os já sugeridos
           },
         }),
         signal: ctrl.signal,
       });
       const j = await r.json();
       const arr = Array.isArray(j?.emojis) ? j.emojis : [];
-      return arr.filter((e: unknown) => typeof e === "string" && e.trim()).slice(0, 10);
+      // variedade no client também: normaliza o seletor de variação (U+FE0F)
+      // pra "🍫" e "🍫️" não escaparem do filtro de já-sugeridos.
+      const stripVS = (s: string) => s.replace(/️/g, "");
+      const avoidNorm = new Set(avoid.map(stripVS));
+      return arr
+        .filter((e: unknown) => typeof e === "string" && e.trim() && !avoidNorm.has(stripVS(e as string)))
+        .slice(0, 10);
     } catch {
       return [];
     } finally {
@@ -2615,19 +2629,24 @@ export function OnboardingPreview({
           break;
         }
         case "emojis": {
-          // NÃO pergunta nada: deduz pelo tom/negócio/Instagram e já mostra os
-          // emojis que combinam (auto-sugestão). Sem "sempre/às vezes/nunca".
+          // NÃO pergunta sempre/às vezes: deduz pelo tom/negócio/Instagram, mostra
+          // os emojis que combinam e CONFIRMA ("são esses?"). Se não gostar, o
+          // usuário pede outros e geramos um conjunto diferente (handler moreEmojis).
           const set = await suggestEmojis();
           if (cancelled) return;
           if (set.length) {
             setEmojiSet(set);
-            setEmoji("Sim"); // usa emojis, no tom da marca
+            setEmoji("Sim");
+            seenEmojisRef.current = set;
             await say(`${tx("emojis.suggested")} ${set.join(" ")}`);
+            await say(tx("emojis.confirm"));
+            if (!cancelled) setPending({ kind: "emojiConfirm" });
           } else {
+            // sem sugestão (modelo indisponível) → não trava, segue sem emojis.
             setEmoji("");
+            await wait(300);
+            if (!cancelled) advanceFrom("emojis");
           }
-          await wait(450);
-          if (!cancelled) advanceFrom("emojis");
           break;
         }
         case "escalation": {
@@ -3028,6 +3047,34 @@ export function OnboardingPreview({
     advanceFrom("tasks");
   };
 
+  // Emojis: confirma os sugeridos ou pede outros (gera um conjunto diferente).
+  const confirmEmojis = () => {
+    setPending(null);
+    addUser(tx("emojis.opt_ok"));
+    advanceFrom("emojis");
+  };
+  const moreEmojis = async () => {
+    setPending(null);
+    addUser(tx("emojis.opt_more"));
+    setTyping(true);
+    const set = await suggestEmojis(seenEmojisRef.current);
+    setTyping(false);
+    if (set.length) {
+      setEmojiSet(set);
+      setEmoji("Sim");
+      seenEmojisRef.current = [...seenEmojisRef.current, ...set];
+      addOddy(`${tx("emojis.more")} ${set.join(" ")}`);
+      await new Promise((r) => setTimeout(r, 450));
+      addOddy(tx("emojis.confirm"));
+      setPending({ kind: "emojiConfirm" });
+    } else {
+      // acabaram as ideias novas → mantém o conjunto anterior e segue.
+      addOddy(tx("emojis.more_none"));
+      await new Promise((r) => setTimeout(r, 400));
+      advanceFrom("emojis");
+    }
+  };
+
   const resetChatState = () => {
     setChat([]);
     setTyping(false);
@@ -3043,7 +3090,7 @@ export function OnboardingPreview({
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
-    setCarroChefe(""); setTone(""); setEmoji(""); setEmojiSet([]);
+    setCarroChefe(""); setTone(""); setEmoji(""); setEmojiSet([]); seenEmojisRef.current = [];
     setFulfillmentMode(""); fulfillmentModeRef.current = "";
     setFulfillment(""); setPayment(""); setEscalation("");
     setTasks([]); setTaskSel([]);
@@ -3332,6 +3379,17 @@ export function OnboardingPreview({
                     {s}
                   </PillButton>
                 ))}
+              </div>
+            )}
+
+            {pending?.kind === "emojiConfirm" && (
+              <div className="flex flex-wrap gap-2 justify-end pt-1 chat-enter">
+                <PillButton onClick={confirmEmojis} className="h-11 px-5">
+                  {tx("emojis.opt_ok")}
+                </PillButton>
+                <PillButton variant="outline" onClick={() => { void moreEmojis(); }} className="h-11 px-5">
+                  {tx("emojis.opt_more")}
+                </PillButton>
               </div>
             )}
 
