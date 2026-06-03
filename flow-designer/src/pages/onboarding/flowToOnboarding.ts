@@ -14,7 +14,7 @@ const STEP_TEXT_KEY: Record<string, { message?: string; question?: string }> = {
   catalog: { question: 'catalog.found' },
   fulfillment: { question: 'fulfillment.msg' },
   tone_generated: { question: 'tone_generated.found' },
-  emojis: { question: 'emojis.msg' },
+  // emojis: auto-sugestão (sem pergunta) → sem override de texto.
   review: { message: 'review.msg' },
   configured: { message: 'configured.l1' },
 }
