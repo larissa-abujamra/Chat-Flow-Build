@@ -1,0 +1,137 @@
+/* Onboarding wizard animations.
+   Migrated from the Replit "Team-Onboard-Flow" mockup.
+   NOTE: Tailwind import + @theme block were intentionally dropped — the host app
+   (flow-designer) already imports Tailwind once via src/index.css, and the
+   component only uses literal Tailwind palette colors + the animations below.
+   `.typing-dot` is also defined canonically in src/index.css, so it is not
+   redeclared here to avoid a global cascade conflict. */
+
+.animate-slide-up {
+  animation: slideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.onboarding-bg {
+  background-color: #FFFFFF;
+}
+
+.chat-enter {
+  animation: chatEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes chatEnter {
+  0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Orb — assistente Squad (gradiente sutil rosa/verde/azul) */
+.orb {
+  position: relative;
+  border-radius: 9999px;
+  overflow: hidden;
+  isolation: isolate;
+  /* volume da esfera: clareia no topo-esquerda, escurece na borda inferior-direita */
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fdf2f8 0%,
+    #e9edf5 46%,
+    #c6cdde 100%
+  );
+  /* sombra de contato (cola a esfera ao fundo) + aro claro fino */
+  box-shadow: 0 10px 22px -6px rgba(40, 30, 80, 0.35),
+    0 2px 6px -2px rgba(40, 30, 80, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+/* "material" colorido girando, sombreado para dentro da esfera */
+.orb::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(
+    from 0deg,
+    #f9a8d4,
+    #c4b5fd,
+    #93c5fd,
+    #6ee7b7,
+    #a7f3d0,
+    #fbcfe8,
+    #f9a8d4
+  );
+  filter: blur(5px) saturate(1.12);
+  animation: orbSpin 9s linear infinite;
+  /* desbota as cores rumo à borda escura → leitura volumétrica */
+  -webkit-mask-image: radial-gradient(
+    circle at 35% 30%,
+    #000 0%,
+    rgba(0, 0, 0, 0.88) 52%,
+    rgba(0, 0, 0, 0.18) 100%
+  );
+  mask-image: radial-gradient(
+    circle at 35% 30%,
+    #000 0%,
+    rgba(0, 0, 0, 0.88) 52%,
+    rgba(0, 0, 0, 0.18) 100%
+  );
+}
+/* brilho especular + sombreamento esférico (aros de luz e penumbra) */
+.orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(
+      circle at 30% 24%,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.35) 16%,
+      rgba(255, 255, 255, 0) 38%
+    ),
+    radial-gradient(
+      circle at 72% 80%,
+      rgba(22, 12, 45, 0.3) 0%,
+      rgba(22, 12, 45, 0) 52%
+    );
+  box-shadow: inset -6px -8px 16px rgba(30, 18, 60, 0.32),
+    inset 6px 8px 16px rgba(255, 255, 255, 0.5);
+}
+@keyframes orbSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb::before {
+    animation: none;
+  }
+}
+
+.dev-slide {
+  animation: devSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes devSlide {
+  0% { opacity: 0; transform: translateX(16px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
