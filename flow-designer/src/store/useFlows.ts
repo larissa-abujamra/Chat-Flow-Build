@@ -510,7 +510,7 @@ const FLOW_C: FlowDefinition = {
 // Fluxo Stefano — espelha o onboarding real "Squad" que testamos (a experiência
 // completa com CNPJ/Places/Instagram/iFood ao vivo). Os nós abaixo representam o
 // fluxo no canvas; o preview à direita roda a experiência real (OnboardingPreview).
-const FLOW_STEFANO: FlowDefinition = {
+const FLOW_STEFANO_BASE: FlowDefinition = {
   id: 'flow-stefano',
   nome: 'Fluxo Stefano',
   scrapingEnabled: true,
@@ -701,6 +701,40 @@ const FLOW_STEFANO: FlowDefinition = {
   ],
 }
 
+// Liga cada nó do Fluxo Stefano à etapa semântica do onboarding real. Isso torna
+// o fluxo "adaptativo": editar texto, reordenar ou excluir um nó reforma o wizard
+// (ver flowToOnboarding). Nós sem entrada aqui (ex.: fs-act-buscar, fs-start) não
+// viram etapa — a busca Places/CNPJ acontece implicitamente em ask_city/contato.
+const FS_STEP_MAP: Record<string, string> = {
+  'fs-msg-welcome': 'welcome',
+  'fs-q-nome': 'welcome',
+  'fs-q-cidade': 'ask_city',
+  'fs-q-contato': 'confirm_contact',
+  'fs-q-site': 'confirm_site',
+  'fs-act-instagram': 'instagram',
+  'fs-q-ifood': 'ifood',
+  'fs-q-catalogo': 'catalog',
+  'fs-q-carrochefe': 'carro_chefe',
+  'fs-act-tom': 'tone_generated',
+  'fs-q-tom': 'tone_generated',
+  'fs-q-emojis': 'emojis',
+  'fs-msg-configurado': 'configured',
+  'fs-end': 'features',
+}
+
+function withStepIds(flow: FlowDefinition): FlowDefinition {
+  return {
+    ...flow,
+    nodes: flow.nodes.map((n) =>
+      FS_STEP_MAP[n.id]
+        ? { ...n, data: { ...n.data, stepId: FS_STEP_MAP[n.id] } }
+        : n,
+    ),
+  }
+}
+
+const FLOW_STEFANO: FlowDefinition = withStepIds(FLOW_STEFANO_BASE)
+
 const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
   'flow-b': FLOW_B,
@@ -709,13 +743,12 @@ const DEFAULTS: Record<string, FlowDefinition> = {
 }
 
 function createEmptyFlow(id: string): FlowDefinition {
-  return {
-    id,
-    nome: 'Novo Fluxo',
-    scrapingEnabled: false,
-    nodes: [{ id: `${id}-start`, type: 'start', position: { x: 300, y: 200 }, data: { type: 'start' } }],
-    edges: [],
-  }
+  // Novos fluxos nascem com o template COMPLETO do onboarding (Fluxo Stefano),
+  // já com os stepIds — então cada novo fluxo é uma experiência adaptável que o
+  // usuário pode reordenar/editar/excluir etapas. Deep-clone para não mutar o
+  // template; os ids internos de nós são mantidos (cada fluxo é salvo à parte).
+  const tpl = JSON.parse(JSON.stringify(FLOW_STEFANO)) as FlowDefinition
+  return { ...tpl, id, nome: 'Novo Fluxo' }
 }
 
 // ── localStorage fallback (used when Supabase is not configured) ─────────────

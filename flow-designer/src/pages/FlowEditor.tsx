@@ -6,16 +6,22 @@ import FlowCanvas from '@/components/FlowCanvas'
 import ChatPreview from '@/components/ChatPreview'
 import { Button } from '@/components/ui/button'
 
-// Fluxo Stefano previews the real Squad onboarding wizard (live CNPJ/Places/iFood),
-// not the scripted node-walker. Lazy so the flow-designer bundle stays lean.
+import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipProvider } from '@/components/ui/tooltip'
+import { flowToOnboarding } from '@/pages/onboarding/flowToOnboarding'
+
+// Adaptive flows (Fluxo Stefano + new flows) preview the REAL Squad onboarding
+// wizard (live CNPJ/Places/iFood), reshaped by the flow's own nodes/order/text.
+// Other flows (A/B/C) keep the scripted node-walker ChatPreview. Lazy-loaded so
+// the flow-designer bundle stays lean.
 const OnboardingPreview = lazy(() =>
   import('@/pages/onboarding/OnboardingFlow').then((m) => ({ default: m.OnboardingPreview })),
 )
-import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipProvider } from '@/components/ui/tooltip'
 
 export default function FlowEditor({ flowId }: { flowId: FlowId }) {
   const { flow, update, exportJSON, importJSON } = useFlow(flowId)
+  // Fluxos adaptativos (com stepIds) → wizard real reformado pelos nós; demais → null.
+  const onboarding = flowToOnboarding(flow)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -121,9 +127,10 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
           />
         </div>
 
-        {/* Right preview. Fluxo Stefano runs the real Squad onboarding wizard;
-            every other flow uses the scripted node-walker chat preview. */}
-        {flowId === 'flow-stefano' ? (
+        {/* Right preview. Adaptive flows (with stepIds — Fluxo Stefano + new
+            flows) run the real Squad onboarding wizard, reshaped by the flow's
+            own nodes/order/texts. Other flows use the scripted ChatPreview. */}
+        {onboarding ? (
           <div
             className="flex flex-col h-full bg-card border-l border-border shrink-0"
             style={{ width: 460 }}
@@ -135,7 +142,7 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
                 </div>
               }
             >
-              <OnboardingPreview embedded />
+              <OnboardingPreview embedded steps={onboarding.steps} overrides={onboarding.overrides} />
             </Suspense>
           </div>
         ) : (

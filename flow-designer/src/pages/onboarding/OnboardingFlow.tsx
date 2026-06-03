@@ -432,29 +432,10 @@ function makeT(overrides: Record<string, string>) {
 
 /* ---------- Ordered, editable step list (drives builder + engine) ---------- */
 
-type StepKind = "builtin" | "message" | "input" | "choice";
-interface Step {
-  id: string;
-  kind: StepKind;
-  title?: string; // only for custom steps
-}
-
-const DEFAULT_STEP_IDS = [
-  "welcome",
-  "ask_city",
-  "place_pick",
-  "confirm_contact",
-  "confirm_site",
-  "instagram",
-  "ifood",
-  "catalog",
-  "carro_chefe",
-  "tone_generated",
-  "emojis",
-  "configured",
-  "features",
-];
-const DEFAULT_STEPS: Step[] = DEFAULT_STEP_IDS.map((id) => ({ id, kind: "builtin" as const }));
+// Modelo de etapas extraído para ./steps (módulo leve) — ver nota lá.
+import { DEFAULT_STEP_IDS, DEFAULT_STEPS, type Step, type StepKind } from "./steps";
+export { DEFAULT_STEP_IDS, DEFAULT_STEPS };
+export type { Step, StepKind };
 
 function customFieldDefs(id: string, kind: StepKind): FlowField[] {
   if (kind === "message")
