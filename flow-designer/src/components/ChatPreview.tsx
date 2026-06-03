@@ -463,7 +463,7 @@ export default function ChatPreview({
           <div className="flex items-center gap-2.5">
             <Orb size={34} />
             <div>
-              <p className="text-sm font-semibold leading-none">Waz</p>
+              <p className="text-sm font-semibold leading-none">Orbie</p>
               <p className="text-[10px] text-green-500 font-medium mt-0.5">online agora</p>
             </div>
           </div>
