@@ -47,11 +47,15 @@ export default function Navbar() {
         })}
       </div>
 
-      {/* Right spacer + brand gradient line at bottom */}
-      <div className="ml-auto flex items-center gap-2">
-        <span className="eyebrow">Waz Onboarding</span>
-        <div className="h-4 w-16 rounded-full brand-gradient opacity-60" />
-      </div>
+      {/* Right: link to the standalone onboarding wizard */}
+      <Link
+        href="/onboarding"
+        className="ml-auto flex items-center gap-2 group"
+        title="Abrir o onboarding"
+      >
+        <span className="eyebrow group-hover:text-foreground transition-colors">Waz Onboarding</span>
+        <div className="h-4 w-16 rounded-full brand-gradient opacity-60 group-hover:opacity-100 transition-opacity" />
+      </Link>
     </nav>
   )
 }
