@@ -15,6 +15,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let business = "";
   let city = "";
   try {
+    // ── Modo "pergunte qualquer coisa" ────────────────────────────────────
+    // Consolidado AQUI (em vez de um /api/ask separado) para o deploy caber no
+    // limite de 12 Serverless Functions do plano Hobby da Vercel. Se o corpo
+    // trouxer `question`, respondemos a pergunta paralela e retornamos {answer}.
+    const question = String((body as Record<string, unknown>).question || "").trim().slice(0, 1000);
+    if (question) {
+      const askKey = process.env.OPENROUTER_API_KEY;
+      if (!askKey) { res.status(200).json({ answer: "" }); return; }
+      const askBiz = String(body.business || "").trim();
+      const askRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${askKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          reasoning: { enabled: false },
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é o assistente do Squad ajudando um lojista durante o onboarding. " +
+                "O usuário fez uma pergunta paralela (fora do roteiro). Responda de forma " +
+                "BREVE, correta e amigável, em português do Brasil (1 a 3 frases). " +
+                "Nunca invente: se não souber, diga que não sabe. Não repita a pergunta. " +
+                (askBiz ? `O negócio dele se chama "${askBiz}". ` : "") +
+                "Depois desta resposta o onboarding continua normalmente.",
+            },
+            { role: "user", content: question },
+          ],
+          max_tokens: 400,
+        }),
+      });
+      if (!askRes.ok) { res.status(200).json({ answer: "" }); return; }
+      const askData: any = await askRes.json();
+      const answer = String(askData?.choices?.[0]?.message?.content || "").trim();
+      res.status(200).json({ answer }); return;
+    }
+
     business = String(body.business || "").trim();
     city = String(body.city || "").trim();
     if (!business && !city) {

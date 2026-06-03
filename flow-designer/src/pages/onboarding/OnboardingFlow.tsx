@@ -1394,7 +1394,10 @@ export function OnboardingPreview({
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 25000);
     try {
-      const r = await fetch(`${import.meta.env.BASE_URL}api/ask`, {
+      // /api/normalize responde também ao modo "pergunta paralela" quando o
+      // corpo traz `question` (consolidado lá p/ caber no limite de 12 funções
+      // Serverless do plano Hobby da Vercel).
+      const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, business: businessNameRef.current.trim() }),
