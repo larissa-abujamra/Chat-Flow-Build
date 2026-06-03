@@ -136,7 +136,7 @@ type NodeId =
   | "instagram" | "instagram_edit" | "instagram_connecting"
   | "fulfillment" | "fulfillment_details" | "payment"
   | "tone_generated" | "tone_manual" | "tone_upload" | "tone_reading"
-  | "emojis" | "emojis_suggest" | "escalation" | "tasks" | "review" | "configured";
+  | "emojis" | "escalation" | "tasks" | "review" | "configured";
 
 type TextField =
   | "businessName" | "city" | "cnpj" | "site" | "instagram" | "setor" | "services"
@@ -296,7 +296,7 @@ const FLOW_NODES: FlowNodeDef[] = [
     title: "Confirmar contato",
     kind: "Pergunta",
     fields: [
-      { key: "confirm_contact.msg", label: "Mensagem", default: "Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:" },
+      { key: "confirm_contact.msg", label: "Mensagem", default: "Peguei os dados do seu negócio. Confere se está tudo certo:" },
       { key: "confirm_contact.opt_sim", label: "Opção: confirmar", default: "Está certo" },
       { key: "confirm_contact.opt_ajustar", label: "Opção: ajustar", default: "O CNPJ está errado" },
       { key: "contact_adjust.msg", label: "Pedir CNPJ correto", default: "Sem problema! Qual é o CNPJ correto da empresa? Vou puxar os dados atualizados." },
@@ -465,13 +465,10 @@ const FLOW_NODES: FlowNodeDef[] = [
   {
     id: "emojis",
     title: "Emojis",
-    kind: "Pergunta",
+    kind: "Mensagem",
     fields: [
-      { key: "emojis.msg", label: "Pergunta", default: "E emojis — uso sempre, às vezes ou nunca?" },
-      { key: "emojis.opt_sempre", label: "Opção: sempre", default: "Sempre" },
-      { key: "emojis.opt_asvezes", label: "Opção: às vezes", default: "Às vezes" },
-      { key: "emojis.opt_nunca", label: "Opção: nunca", default: "Nunca" },
-      { key: "emojis.suggested", label: "Emojis sugeridos", default: "Boa! Pelo seu tom e seu negócio, esses combinam com vocês:" },
+      // Não há pergunta: deduzimos os emojis pelo tom/negócio e mostramos.
+      { key: "emojis.suggested", label: "Emojis sugeridos", default: "Boa! Pelo seu tom e seu negócio, vou usar emojis assim:" },
     ],
   },
   {
@@ -707,10 +704,12 @@ function ContactBlock({
   endereco: string;
   telefone: string;
 }) {
+  // Telefone removido do card de contato a pedido — segue descoberto e salvo no
+  // perfil (pro agente usar), mas não é exibido nem confirmado aqui.
+  void telefone;
   const rows = [
     { Icon: FileText, label: "CNPJ", value: cnpj ? formatCnpj(cnpj) : "[CNPJ — a confirmar]" },
     { Icon: MapPin, label: "Endereço", value: endereco || "[Endereço — a confirmar]" },
-    { Icon: Phone, label: "Telefone", value: telefone || "[Telefone — a confirmar]" },
   ];
   return (
     <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -2615,27 +2614,17 @@ export function OnboardingPreview({
           }
           break;
         }
-        case "emojis":
-          await say(tx("emojis.msg"));
-          if (!cancelled)
-            setPending({
-              kind: "choice",
-              options: [
-                // sempre/às vezes → sugere emojis que combinam com o tom/negócio.
-                { label: tx("emojis.opt_sempre"), value: "sempre", next: "emojis_suggest", set: () => setEmoji("Sempre") },
-                { label: tx("emojis.opt_asvezes"), value: "asvezes", next: "emojis_suggest", set: () => setEmoji("Às vezes") },
-                { label: tx("emojis.opt_nunca"), value: "nunca", next: "__advance__", set: () => { setEmoji("Nunca"); setEmojiSet([]); } },
-              ],
-            });
-          break;
-        case "emojis_suggest": {
-          // Transiente: sugere emojis relevantes ao tom/negócio/Instagram que
-          // achamos, mostra e segue. advanceFrom("emojis") → review.
+        case "emojis": {
+          // NÃO pergunta nada: deduz pelo tom/negócio/Instagram e já mostra os
+          // emojis que combinam (auto-sugestão). Sem "sempre/às vezes/nunca".
           const set = await suggestEmojis();
           if (cancelled) return;
           if (set.length) {
             setEmojiSet(set);
+            setEmoji("Sim"); // usa emojis, no tom da marca
             await say(`${tx("emojis.suggested")} ${set.join(" ")}`);
+          } else {
+            setEmoji("");
           }
           await wait(450);
           if (!cancelled) advanceFrom("emojis");
@@ -3180,7 +3169,6 @@ export function OnboardingPreview({
         { label: "Negócio", value: businessName },
         { label: "CNPJ", value: cnpjData?.cnpj || "" },
         { label: "Endereço", value: placeAddr || cnpjData?.endereco || "" },
-        { label: "Telefone", value: placeTelefone || cnpjData?.telefone || "" },
         { label: "Horário", value: placeHorario || cnpjData?.horario || "" },
         { label: "Site", value: site },
         { label: "Instagram", value: igData?.username ? `@${igData.username}` : (igHandle || "") },
