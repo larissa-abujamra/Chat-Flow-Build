@@ -11,6 +11,11 @@ export interface Step {
   title?: string; // only for custom steps
 }
 
+// Ordem canônica do onboarding. carro_chefe e emojis ficam logo após suas etapas
+// "mãe" (catalog e tone_generated) — no chat não há contador de etapas, então
+// perguntas consecutivas fluem como uma só conversa (a fusão pedida). As etapas
+// OPERACIONAIS (fulfillment, payment, escalation, tasks) + a `review` final são o
+// que permite ao time de IA realmente atender, cobrar e operar — não só descrever.
 export const DEFAULT_STEP_IDS = [
   "welcome",
   "ask_city",
@@ -21,8 +26,13 @@ export const DEFAULT_STEP_IDS = [
   "ifood",
   "catalog",
   "carro_chefe",
+  "fulfillment",
+  "payment",
   "tone_generated",
   "emojis",
+  "escalation",
+  "tasks",
+  "review",
   "configured",
   "features",
 ];
