@@ -1,7 +1,0 @@
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "flow-designer/dist",
-  "installCommand": "npm install",
-  "framework": "vite",
-  "rootDirectory": "flow-designer"
-}
