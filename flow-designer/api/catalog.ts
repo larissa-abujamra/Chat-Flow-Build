@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fetchCatalogByScrape } from './_lib/research-core'
+import { fetchCatalogByScrape, isSafePublicUrl } from './_lib/research-core'
 
 export const config = { maxDuration: 60 }
 
@@ -23,11 +23,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const sdKey = process.env.SCRAPINGDOG_API_KEY;
     const site = String(body.site || "").trim();
+    // Anti-SSRF: normaliza e exige URL http(s) pública (bloqueia localhost,
+    // redes privadas e 169.254.169.254). URL insegura → sem catálogo, como se
+    // não houvesse site raspável (coerente com o "nunca inventa itens").
+    const siteUrl = site ? (/^https?:\/\//i.test(site) ? site : `https://${site}`) : "";
+    const siteSafe = !!siteUrl && isSafePublicUrl(siteUrl);
 
     // Catálogo SÓ via scraping do site / link da bio (Linktree etc.).
     // Sem site/link raspável não há catálogo (nunca inventamos itens).
     const produtos =
-      site && sdKey
+      siteSafe && sdKey
         ? await fetchCatalogByScrape(sdKey, orKey, site, business)
         : [];
     const source = produtos.length ? "scrape" : "none";

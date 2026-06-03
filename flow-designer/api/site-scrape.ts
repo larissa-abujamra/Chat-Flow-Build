@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { htmlToText, extractInstagramFromHtml, extractMeta, extractSiteInfo } from './_lib/research-core'
+import { htmlToText, extractInstagramFromHtml, extractMeta, extractSiteInfo, isSafePublicUrl } from './_lib/research-core'
 
 export const config = { maxDuration: 60 }
 
@@ -28,6 +28,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const url = /^https?:\/\//i.test(rawSite) ? rawSite : `https://${rawSite}`;
+    // Anti-SSRF: só raspamos URLs http(s) públicas. Bloqueia localhost, redes
+    // privadas e o IP de metadados de nuvem (169.254.169.254). Nenhum site real
+    // de cliente cai aqui, então não afeta o fluxo legítimo.
+    if (!isSafePublicUrl(url)) {
+      res.status(400).json({ error: "URL de site inválida ou não permitida." }); return;
+    }
     // Renderiza JS (dynamic=true): a maioria dos sites de PME (Wix, React,
     // etc.) monta o conteúdo — e os links de redes sociais do rodapé — no
     // cliente, então sem renderizar o HTML volta vazio. Cai pro modo leve
