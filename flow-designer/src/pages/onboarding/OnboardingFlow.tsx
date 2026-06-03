@@ -2347,9 +2347,10 @@ export function OnboardingPreview({
           break;
         }
         case "instagram": {
-          // Aguarda a varredura do site (pode trazer o @ do Instagram).
+          // Aguarda a varredura do site (pode trazer o @ do Instagram). Sem
+          // mensagem aqui: o passo confirm_site/site_scraping já avisou que estava
+          // lendo o site — repetir "deixa eu dar uma olhada no site" era redundante.
           if (siteScrapePromiseRef.current && !siteScrapeRef.current) {
-            await say(tx("instagram.scanning"));
             const sc = await siteScrapePromiseRef.current;
             if (cancelled) return;
             siteScrapeRef.current = sc;
