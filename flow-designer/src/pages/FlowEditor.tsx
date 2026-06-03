@@ -1,10 +1,16 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, lazy, Suspense } from 'react'
 import { Download, Upload, Edit2, Check } from 'lucide-react'
 import type { FlowId } from '@/types'
 import { useFlow } from '@/store/useFlows'
 import FlowCanvas from '@/components/FlowCanvas'
 import ChatPreview from '@/components/ChatPreview'
 import { Button } from '@/components/ui/button'
+
+// Fluxo Stefano previews the real Squad onboarding wizard (live CNPJ/Places/iFood),
+// not the scripted node-walker. Lazy so the flow-designer bundle stays lean.
+const OnboardingPreview = lazy(() =>
+  import('@/pages/onboarding/OnboardingFlow').then((m) => ({ default: m.OnboardingPreview })),
+)
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipProvider } from '@/components/ui/tooltip'
 
@@ -115,14 +121,32 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
           />
         </div>
 
-        {/* Chat preview — collapsible */}
-        <ChatPreview
-          flow={flow}
-          flowId={flowId}
-          onActiveNodeChange={setActiveNodeId}
-          collapsed={chatCollapsed}
-          onToggleCollapse={() => setChatCollapsed((v) => !v)}
-        />
+        {/* Right preview. Fluxo Stefano runs the real Squad onboarding wizard;
+            every other flow uses the scripted node-walker chat preview. */}
+        {flowId === 'flow-stefano' ? (
+          <div
+            className="flex flex-col h-full bg-card border-l border-border shrink-0"
+            style={{ width: 460 }}
+          >
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Carregando…
+                </div>
+              }
+            >
+              <OnboardingPreview embedded />
+            </Suspense>
+          </div>
+        ) : (
+          <ChatPreview
+            flow={flow}
+            flowId={flowId}
+            onActiveNodeChange={setActiveNodeId}
+            collapsed={chatCollapsed}
+            onToggleCollapse={() => setChatCollapsed((v) => !v)}
+          />
+        )}
       </div>
     </div>
   )
