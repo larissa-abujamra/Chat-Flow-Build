@@ -60,6 +60,21 @@ interface PlaceCandidate {
   horario: string;
   telefone: string;
   site: string;
+  delivery?: boolean; // Google Places: faz entrega (undefined = desconhecido)
+  takeout?: boolean;  // Google Places: faz retirada
+}
+
+// Deduz o modo de atendimento (Entrega/Retirada/Entrega e retirada) a partir dos
+// sinais do Google Places. Retorna "" quando nenhum sinal é conhecido (aí o
+// onboarding pergunta normalmente — nunca inventa).
+function inferFulfillmentMode(c?: { delivery?: boolean; takeout?: boolean } | null): string {
+  if (!c) return "";
+  const d = c.delivery === true;
+  const t = c.takeout === true;
+  if (d && t) return "Entrega e retirada";
+  if (d) return "Entrega";
+  if (t) return "Retirada";
+  return "";
 }
 
 interface CnpjData {
@@ -395,6 +410,7 @@ const FLOW_NODES: FlowNodeDef[] = [
     kind: "Pergunta",
     fields: [
       { key: "fulfillment.msg", label: "Pergunta (modo)", default: "Como seus clientes recebem os pedidos?" },
+      { key: "fulfillment.detected", label: "Modo detectado", default: "Vi que vocês trabalham com {modo}." },
       { key: "fulfillment.opt_entrega", label: "Opção: entrega", default: "Entrega" },
       { key: "fulfillment.opt_retirada", label: "Opção: retirada", default: "Retirada" },
       { key: "fulfillment.opt_ambos", label: "Opção: os dois", default: "Entrega e retirada" },
@@ -615,14 +631,22 @@ function SearchingBlock({ done }: { done?: boolean }) {
 }
 
 function CatalogBlock({ items }: { items: { name: string; price: string | null }[] }) {
+  // Mostra 3 itens por padrão; o resto fica atrás de um "ver todos (N)" com seta.
+  const PREVIEW = 3;
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = items.length > PREVIEW;
+  const shown = expanded || !hasMore ? items : items.slice(0, PREVIEW);
   return (
     <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-[#13161D]" />
         <span className="text-sm font-semibold text-[#13161D]">Catálogo encontrado</span>
+        {items.length > 0 && (
+          <span className="ml-auto text-xs text-gray-400">{items.length} {items.length === 1 ? "item" : "itens"}</span>
+        )}
       </div>
       <ul className="divide-y divide-gray-100">
-        {items.map((item) => (
+        {shown.map((item) => (
           <li key={item.name} className="px-4 py-3 flex items-center justify-between gap-3">
             <span className="text-sm text-[#13161D]">{item.name}</span>
             {item.price ? (
@@ -635,6 +659,16 @@ function CatalogBlock({ items }: { items: { name: string; price: string | null }
           </li>
         ))}
       </ul>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 border-t border-gray-100 text-[13px] font-medium text-gray-500 hover:text-[#13161D] hover:bg-gray-50 transition-colors"
+        >
+          {expanded ? "Ver menos" : `Ver todos os ${items.length} itens`}
+          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -1548,7 +1582,7 @@ export function OnboardingPreview({
       const json = await r.json();
       if (!r.ok || json.error || !Array.isArray(json.candidatos)) return [];
       return json.candidatos
-        .map((c: { nome?: string; endereco?: string; cidade?: string; categoria?: string; horario?: string; telefone?: string; site?: string }, i: number) => ({
+        .map((c: { nome?: string; endereco?: string; cidade?: string; categoria?: string; horario?: string; telefone?: string; site?: string; delivery?: boolean; takeout?: boolean }, i: number) => ({
           id: `u${i + 1}`,
           nome: String(c?.nome || business).trim() || business,
           endereco: String(c?.endereco || "").trim(),
@@ -1557,6 +1591,8 @@ export function OnboardingPreview({
           horario: String(c?.horario || "").trim(),
           telefone: String(c?.telefone || "").trim(),
           site: String(c?.site || "").trim(),
+          delivery: typeof c?.delivery === "boolean" ? c.delivery : undefined,
+          takeout: typeof c?.takeout === "boolean" ? c.takeout : undefined,
         }))
         .filter((c: PlaceCandidate) => c.endereco);
     } catch {
@@ -2271,6 +2307,13 @@ export function OnboardingPreview({
           break;
         case "fulfillment": {
           // OPERACIONAL: como o cliente recebe. Sem isso o Waz não fecha pedido.
+          // Se o Google Places já indicou entrega/retirada (inferido no place_pick),
+          // pulamos a pergunta e vamos direto pras regras — só confirmamos o modo.
+          if (fulfillmentModeRef.current) {
+            await say(tx("fulfillment.detected", { modo: fulfillmentModeRef.current.toLowerCase() }));
+            if (!cancelled) setNode("fulfillment_details");
+            break;
+          }
           await say(tx("fulfillment.msg"));
           if (!cancelled)
             setPending({
@@ -2711,6 +2754,10 @@ export function OnboardingPreview({
     if (c.site) { setSite(c.site); siteRef.current = c.site; }
     // usa a cidade canônica descoberta (corrige abreviação/erro do que foi digitado)
     if (c.cidade) { setCity(c.cidade); cityRef.current = c.cidade; }
+    // Sinais de entrega/retirada do Google Places → pré-preenche o modo de
+    // atendimento (a etapa fulfillment só confirma em vez de perguntar do zero).
+    const inferred = inferFulfillmentMode(c);
+    if (inferred) { setFulfillmentMode(inferred); fulfillmentModeRef.current = inferred; }
     addUser(`${c.nome} — ${c.endereco}`);
     advanceFrom("place_pick");
   };

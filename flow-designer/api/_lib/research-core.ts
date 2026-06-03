@@ -178,6 +178,10 @@ export interface PlaceResult {
   horario: string;
   telefone: string;
   website: string;
+  // Sinais de atendimento do Google Places (quando conhecidos) — usados pra
+  // pré-preencher entrega/retirada no onboarding. undefined = desconhecido.
+  delivery?: boolean;
+  takeout?: boolean;
 }
 
 // Converte uma hora "HH:MM" para o formato compacto pt-BR: "09:00"→"9h",
@@ -316,6 +320,8 @@ export async function fetchGooglePlaces(
           "places.primaryTypeDisplayName",
           "places.websiteUri",
           "places.addressComponents",
+          "places.delivery",
+          "places.takeout",
         ].join(","),
       },
       body: JSON.stringify({
@@ -352,6 +358,8 @@ export async function fetchGooglePlaces(
           horario: Array.isArray(wd) ? condensarHorario(wd) : "",
           telefone: s(pl.nationalPhoneNumber),
           website: s(pl.websiteUri),
+          delivery: typeof pl.delivery === "boolean" ? pl.delivery : undefined,
+          takeout: typeof pl.takeout === "boolean" ? pl.takeout : undefined,
         } as PlaceResult,
       };
     });
