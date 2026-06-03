@@ -90,6 +90,12 @@ function matchOpcao(input: string, opcoes: OpcaoItem[]): OpcaoItem | null {
   return opcoes[0]
 }
 
+// ── Message splitting ─────────────────────────────────────────────────────────
+
+function splitMessages(texto: string): string[] {
+  return texto.split(/\n[ \t]*---[ \t]*\n/).map((p) => p.trim()).filter(Boolean)
+}
+
 // ── Traversal ─────────────────────────────────────────────────────────────────
 
 function findStartNode(flow: FlowDefinition): FlowNode | null {
@@ -121,12 +127,16 @@ function walkForward(
     const data = node.data
     if (data.type === 'start') { nodeId = nextNode(flow, node.id)?.id ?? null; continue }
     if (data.type === 'message') {
-      items.push({ kind: 'bot', text: data.texto, nodeId: node.id })
+      for (const part of splitMessages(data.texto)) {
+        items.push({ kind: 'bot', text: part, nodeId: node.id })
+      }
       nodeId = nextNode(flow, node.id)?.id ?? null
       continue
     }
     if (data.type === 'question') {
-      items.push({ kind: 'bot', text: data.texto, nodeId: node.id })
+      for (const part of splitMessages(data.texto)) {
+        items.push({ kind: 'bot', text: part, nodeId: node.id })
+      }
       return { items, currentNodeId: node.id, waitingForInput: true, done: false }
     }
     if (data.type === 'action') {
@@ -135,7 +145,11 @@ function walkForward(
       continue
     }
     if (data.type === 'end') {
-      if (data.texto) items.push({ kind: 'bot', text: data.texto, nodeId: node.id })
+      if (data.texto) {
+        for (const part of splitMessages(data.texto)) {
+          items.push({ kind: 'bot', text: part, nodeId: node.id })
+        }
+      }
       return { items, currentNodeId: node.id, waitingForInput: false, done: true }
     }
     break
@@ -341,7 +355,7 @@ export default function ChatPreview({
     if (item.kind === 'bot') {
       return (
         <div key={i} className="flex items-end gap-2">
-          <div className={`max-w-[84%] px-3.5 py-2.5 rounded-2xl rounded-tl-sm text-sm bg-card border border-border text-foreground shadow-sm ${item.text ? '' : 'italic text-muted-foreground'}`}>
+          <div className={`max-w-[84%] px-3.5 py-2.5 rounded-2xl rounded-tl-sm text-sm bg-card border border-border text-foreground shadow-sm whitespace-pre-wrap ${item.text ? '' : 'italic text-muted-foreground'}`}>
             {item.text || '(mensagem vazia)'}
           </div>
         </div>
