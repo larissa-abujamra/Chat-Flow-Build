@@ -1,26 +1,10 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { FlowDefinition, FlowId } from '../types'
-
-function makeDefaultFlow(id: FlowId, nome: string, scrapingEnabled: boolean): FlowDefinition {
-  return {
-    id,
-    nome,
-    scrapingEnabled,
-    nodes: [
-      {
-        id: `${id}-start`,
-        type: 'start',
-        position: { x: 200, y: 60 },
-        data: { type: 'start' },
-      },
-    ],
-    edges: [],
-  }
-}
+import { supabase } from '@/lib/supabase'
 
 const FLOW_A: FlowDefinition = {
   id: 'flow-a',
-  nome: 'Fluxo A',
+  nome: 'Fluxo A - Vi & Evandro',
   scrapingEnabled: true,
   nodes: [
     { id: 'fa-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
@@ -167,47 +151,443 @@ const FLOW_A: FlowDefinition = {
   ],
 }
 
-const DEFAULTS: Record<FlowId, FlowDefinition> = {
-  'flow-a': FLOW_A,
-  'flow-b': makeDefaultFlow('flow-b', 'Fluxo B', true),
-  'flow-c': makeDefaultFlow('flow-c', 'Fluxo C', false),
+const FLOW_B: FlowDefinition = {
+  id: 'flow-b',
+  nome: 'Fluxo B - Ana & Luiz',
+  scrapingEnabled: false,
+  nodes: [
+    { id: 'fb-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
+    {
+      id: 'fb-msg-welcome',
+      type: 'message',
+      position: { x: 300, y: 200 },
+      data: {
+        type: 'message',
+        texto:
+          'Oi Ana, bem-vindo ao Squad! 👋\n\nA partir de agora você conta com um time trabalhando 24/7 por você:\n\n📣Maky, seu marketing\n📱Waz, suas vendas e atendimento\n💰Fin, seu financeiro\n\nVou te guiar nesses primeiros passos e depois te apresentar ao seu time digital.\n\nPra isso, preciso de algumas informações sobre a sua empresa.',
+      },
+    },
+    {
+      id: 'fb-q-nome',
+      type: 'question',
+      position: { x: 300, y: 460 },
+      data: {
+        type: 'question',
+        texto: 'Vamos começar pelo básico: qual é o nome da sua empresa?',
+        opcoes: [{ id: 'fb-q-nome-r1', label: 'Nome da empresa' }],
+      },
+    },
+    {
+      id: 'fb-q-cnpj',
+      type: 'question',
+      position: { x: 300, y: 660 },
+      data: {
+        type: 'question',
+        texto: 'Ótimo! Agora, me passa o CNPJ da empresa? Vou usar pra extrair algumas informações e agilizar seu cadastro.',
+        opcoes: [{ id: 'fb-q-cnpj-r1', label: 'CNPJ' }],
+      },
+    },
+    {
+      id: 'fb-q-catalogo',
+      type: 'question',
+      position: { x: 300, y: 860 },
+      data: {
+        type: 'question',
+        texto: 'Você já tem um cardápio de produtos? Pode ser link, pdf, site… me envie aqui!',
+        opcoes: [{ id: 'fb-q-catalogo-r1', label: 'Cardápio' }],
+      },
+    },
+    {
+      id: 'fb-msg-catalogo-ok',
+      type: 'message',
+      position: { x: 300, y: 1060 },
+      data: {
+        type: 'message',
+        texto:
+          'Vendo aqui seu cardápio, consegui encontrar alguns produtos, como:\n\n- Docinhos variados (R$ 5,50 - R$ 500)\n- Cookie - R$ 16,00\n- Panelinha 1,3kg - R$ 180,00\n\nDepois terminamos de configurá-lo, ok?\n\nÉ importante agora que entendemos o tom de voz que você gostaria que o Waz, o seu novo assistente de atendimento, use para atender seus clientes.',
+      },
+    },
+    {
+      id: 'fb-q-tom',
+      type: 'question',
+      position: { x: 300, y: 1300 },
+      data: {
+        type: 'question',
+        texto:
+          'Escolha o que mais combina com a sua marca:\n\n1️⃣ Casual e descontraído — Conversa leve e amigável, como entre amigos. Linguagem simples e próxima do dia a dia.\n\n2️⃣ Afetuoso e acolhedor — Tom carinhoso e cuidadoso. Faz a cliente se sentir querida. Bom pra marcas com clima de casa.\n\n3️⃣ Elegante e sofisticado — Tom premium e refinado. Vocabulário cuidado, ideal pra marcas mais exclusivas.\n\nAlgum desses combina com sua marca? Você pode também digitar como define seu tom de voz.',
+        opcoes: [
+          { id: 'fb-q-tom-r1', label: 'Casual e descontraído' },
+          { id: 'fb-q-tom-r2', label: 'Afetuoso e acolhedor' },
+          { id: 'fb-q-tom-r3', label: 'Elegante e sofisticado' },
+          { id: 'fb-q-tom-r4', label: 'Descrever meu tom' },
+        ],
+      },
+    },
+    {
+      id: 'fb-q-regras-1',
+      type: 'question',
+      position: { x: 300, y: 1600 },
+      data: {
+        type: 'question',
+        texto:
+          'Agora me conta as principais regras do seu negócio.\n\nVocê trabalha mais com encomenda, pronta entrega, ou os dois? Se tiver prazo de antecedência ou pedido mínimo, me conta também.',
+        opcoes: [{ id: 'fb-q-regras-1-r1', label: 'Modelo de atendimento' }],
+      },
+    },
+    {
+      id: 'fb-q-regras-2',
+      type: 'question',
+      position: { x: 300, y: 1820 },
+      data: {
+        type: 'question',
+        texto: 'O que você aceita personalizar nos pedidos (sabor, recheio, tema...) e o que você não faz?',
+        opcoes: [{ id: 'fb-q-regras-2-r1', label: 'Personalizações' }],
+      },
+    },
+    {
+      id: 'fb-q-regras-3',
+      type: 'question',
+      position: { x: 300, y: 2020 },
+      data: {
+        type: 'question',
+        texto: 'Como o cliente recebe? Você faz entrega (pra quais regiões e com qual taxa) ou é só retirada no local?',
+        opcoes: [{ id: 'fb-q-regras-3-r1', label: 'Entrega / retirada' }],
+      },
+    },
+    {
+      id: 'fb-q-regras-4',
+      type: 'question',
+      position: { x: 300, y: 2220 },
+      data: {
+        type: 'question',
+        texto: 'Quais formas de pagamento você aceita? E pra encomenda, costuma pedir sinal ou entrada?',
+        opcoes: [{ id: 'fb-q-regras-4-r1', label: 'Pagamento' }],
+      },
+    },
+    {
+      id: 'fb-q-faq',
+      type: 'question',
+      position: { x: 300, y: 2420 },
+      data: {
+        type: 'question',
+        texto:
+          'Criei algumas perguntas frequentes pro seu negócio. Revisa pra ver se ficou certinho?\n\n1. Como faço meu pedido? Tem prazo de antecedência?\nTrabalhamos somente por encomenda, com no mínimo 5 horas de antecedência. É só nos chamar pra combinar tudo!\n\n2. Vocês fazem pedidos personalizados?\nSim! Personalizamos tudo — sabor, recheio, tema, do jeitinho que você quiser.\n\n3. Como recebo meu pedido?\nAs entregas são feitas às terças-feiras. Me passa seu endereço que confirmamos a entrega pra você.\n\n4. Como funciona o pagamento?\nAs encomendas são confirmadas com 50% de sinal, e o restante é pago na entrega.\n\nVocê pode me enviar mais perguntas com as respostas se achar necessário, ou continuar depois.',
+        opcoes: [
+          { id: 'fb-q-faq-r1', label: 'Continuar depois' },
+          { id: 'fb-q-faq-r2', label: 'Enviar mais perguntas' },
+        ],
+      },
+    },
+    {
+      id: 'fb-q-nome-assistente',
+      type: 'question',
+      position: { x: 300, y: 2720 },
+      data: {
+        type: 'question',
+        texto: 'Agora vamos dar um nome que os seus clientes vão chamar o Waz, seu assistente de atendimento.',
+        opcoes: [{ id: 'fb-q-nome-assistente-r1', label: 'Nome do assistente' }],
+      },
+    },
+    {
+      id: 'fb-end',
+      type: 'end',
+      position: { x: 300, y: 2940 },
+      data: { type: 'end', texto: 'Você já chegou a 90% do onboarding! 🎉 Que tal conhecer as ferramentas agora?' },
+    },
+  ],
+  edges: [
+    { id: 'fb-e1', source: 'fb-start', target: 'fb-msg-welcome' },
+    { id: 'fb-e2', source: 'fb-msg-welcome', target: 'fb-q-nome' },
+    { id: 'fb-e3', source: 'fb-q-nome', target: 'fb-q-cnpj', sourceHandle: 'fb-q-nome-r1' },
+    { id: 'fb-e4', source: 'fb-q-cnpj', target: 'fb-q-catalogo', sourceHandle: 'fb-q-cnpj-r1' },
+    { id: 'fb-e5', source: 'fb-q-catalogo', target: 'fb-msg-catalogo-ok', sourceHandle: 'fb-q-catalogo-r1' },
+    { id: 'fb-e6', source: 'fb-msg-catalogo-ok', target: 'fb-q-tom' },
+    { id: 'fb-e7', source: 'fb-q-tom', target: 'fb-q-regras-1', sourceHandle: 'fb-q-tom-r1' },
+    { id: 'fb-e8', source: 'fb-q-tom', target: 'fb-q-regras-1', sourceHandle: 'fb-q-tom-r2' },
+    { id: 'fb-e9', source: 'fb-q-tom', target: 'fb-q-regras-1', sourceHandle: 'fb-q-tom-r3' },
+    { id: 'fb-e10', source: 'fb-q-tom', target: 'fb-q-regras-1', sourceHandle: 'fb-q-tom-r4' },
+    { id: 'fb-e11', source: 'fb-q-regras-1', target: 'fb-q-regras-2', sourceHandle: 'fb-q-regras-1-r1' },
+    { id: 'fb-e12', source: 'fb-q-regras-2', target: 'fb-q-regras-3', sourceHandle: 'fb-q-regras-2-r1' },
+    { id: 'fb-e13', source: 'fb-q-regras-3', target: 'fb-q-regras-4', sourceHandle: 'fb-q-regras-3-r1' },
+    { id: 'fb-e14', source: 'fb-q-regras-4', target: 'fb-q-faq', sourceHandle: 'fb-q-regras-4-r1' },
+    { id: 'fb-e15', source: 'fb-q-faq', target: 'fb-q-nome-assistente', sourceHandle: 'fb-q-faq-r1' },
+    { id: 'fb-e16', source: 'fb-q-faq', target: 'fb-q-nome-assistente', sourceHandle: 'fb-q-faq-r2' },
+    { id: 'fb-e17', source: 'fb-q-nome-assistente', target: 'fb-end', sourceHandle: 'fb-q-nome-assistente-r1' },
+  ],
 }
 
-function loadFlow(id: FlowId): FlowDefinition {
+const FLOW_C: FlowDefinition = {
+  id: 'flow-c',
+  nome: 'Fluxo C',
+  scrapingEnabled: false,
+  nodes: [
+    { id: 'fc-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
+    {
+      id: 'fc-msg-welcome',
+      type: 'message',
+      position: { x: 300, y: 200 },
+      data: {
+        type: 'message',
+        texto:
+          'Oi Bernard, bem-vindo ao Squad! 👋\n\nA partir de agora você conta com um time trabalhando 24/7 por você:\n\n📣Maky, seu marketing\n📱Waz, suas vendas e atendimento\n💰Fin, seu financeiro\n\nVou te guiar nesses primeiros passos e depois te apresentar ao seu time digital.\n\nPra isso, preciso de algumas informações sobre a sua empresa.',
+      },
+    },
+    {
+      id: 'fc-q-nome',
+      type: 'question',
+      position: { x: 300, y: 460 },
+      data: {
+        type: 'question',
+        texto: 'Vamos começar pelo básico: qual é o nome da sua empresa?',
+        opcoes: [{ id: 'fc-q-nome-r1', label: 'Nome da empresa' }],
+      },
+    },
+    {
+      id: 'fc-q-segmento',
+      type: 'question',
+      position: { x: 300, y: 660 },
+      data: {
+        type: 'question',
+        texto: 'E em qual segmento a empresa atua?',
+        opcoes: [{ id: 'fc-q-segmento-r1', label: 'Segmento' }],
+      },
+    },
+    {
+      id: 'fc-q-boas-vindas',
+      type: 'question',
+      position: { x: 300, y: 860 },
+      data: {
+        type: 'question',
+        texto: 'Você já tem uma mensagem de boas vindas?',
+        opcoes: [{ id: 'fc-q-boas-vindas-r1', label: 'Mensagem de boas vindas' }],
+      },
+    },
+    {
+      id: 'fc-q-catalogo',
+      type: 'question',
+      position: { x: 300, y: 1060 },
+      data: {
+        type: 'question',
+        texto:
+          'Você quer configurar como será enviado seu catálogo de produtos? Como você costuma enviar o catálogo para seus clientes?',
+        opcoes: [{ id: 'fc-q-catalogo-r1', label: 'Catálogo' }],
+      },
+    },
+    {
+      id: 'fc-q-horarios',
+      type: 'question',
+      position: { x: 300, y: 1260 },
+      data: {
+        type: 'question',
+        texto:
+          'Quais são os seus dias e horários de funcionamento? Pode ser detalhado: dias diferentes, horários diferentes, exceções.',
+        opcoes: [{ id: 'fc-q-horarios-r1', label: 'Horários' }],
+      },
+    },
+    {
+      id: 'fc-q-localizacao',
+      type: 'question',
+      position: { x: 300, y: 1460 },
+      data: {
+        type: 'question',
+        texto: 'Onde fica seu negócio? Bairro, cidade e onde faz entrega.',
+        opcoes: [{ id: 'fc-q-localizacao-r1', label: 'Localização' }],
+      },
+    },
+    {
+      id: 'fc-q-entrega',
+      type: 'question',
+      position: { x: 300, y: 1660 },
+      data: {
+        type: 'question',
+        texto: 'Vocês fazem entrega ou retirada?',
+        opcoes: [{ id: 'fc-q-entrega-r1', label: 'Entrega / retirada' }],
+      },
+    },
+    {
+      id: 'fc-q-prazo',
+      type: 'question',
+      position: { x: 300, y: 1860 },
+      data: {
+        type: 'question',
+        texto: 'Qual é o prazo mínimo para encomendas?',
+        opcoes: [{ id: 'fc-q-prazo-r1', label: 'Prazo mínimo' }],
+      },
+    },
+    {
+      id: 'fc-q-produto',
+      type: 'question',
+      position: { x: 300, y: 2060 },
+      data: {
+        type: 'question',
+        texto: 'Qual o produto mais vendido? Conte o nome, a faixa de preço e o diferencial.',
+        opcoes: [{ id: 'fc-q-produto-r1', label: 'Produto mais vendido' }],
+      },
+    },
+    {
+      id: 'fc-q-tom',
+      type: 'question',
+      position: { x: 300, y: 2260 },
+      data: {
+        type: 'question',
+        texto:
+          'Como a gente deve conversar com os clientes?\n\n1️⃣ Casual e descontraído — Conversa leve e amigável, como entre amigos. Linguagem simples e próxima do dia a dia.\n\n2️⃣ Afetuoso e acolhedor — Tom carinhoso e cuidadoso. Faz a cliente se sentir querida. Bom pra marcas com clima de casa.\n\n3️⃣ Elegante e sofisticado — Tom premium e refinado. Vocabulário cuidado, ideal pra marcas mais exclusivas.',
+        opcoes: [
+          { id: 'fc-q-tom-r1', label: 'Casual e descontraído' },
+          { id: 'fc-q-tom-r2', label: 'Afetuoso e acolhedor' },
+          { id: 'fc-q-tom-r3', label: 'Elegante e sofisticado' },
+        ],
+      },
+    },
+    {
+      id: 'fc-q-emojis',
+      type: 'question',
+      position: { x: 300, y: 2520 },
+      data: {
+        type: 'question',
+        texto: 'O agente deve usar emojis?',
+        opcoes: [
+          { id: 'fc-q-emojis-r1', label: 'Às vezes' },
+          { id: 'fc-q-emojis-r2', label: 'Sim' },
+          { id: 'fc-q-emojis-r3', label: 'Não' },
+        ],
+      },
+    },
+    {
+      id: 'fc-q-quais-emojis',
+      type: 'question',
+      position: { x: 620, y: 2700 },
+      data: {
+        type: 'question',
+        texto: 'Quais emojis você prefere usar?',
+        opcoes: [{ id: 'fc-q-quais-emojis-r1', label: 'Emojis preferidos' }],
+      },
+    },
+    {
+      id: 'fc-q-mais-info',
+      type: 'question',
+      position: { x: 300, y: 2900 },
+      data: {
+        type: 'question',
+        texto: 'Tem mais alguma coisa importante que o agente precisa saber?',
+        opcoes: [{ id: 'fc-q-mais-info-r1', label: 'Informações adicionais' }],
+      },
+    },
+    {
+      id: 'fc-end',
+      type: 'end',
+      position: { x: 300, y: 3120 },
+      data: {
+        type: 'end',
+        texto:
+          'Prontinho! Tenho tudo que preciso para configurar seu Waz. Em instantes ele estará pronto para atender seus clientes 24/7! 🎉',
+      },
+    },
+  ],
+  edges: [
+    { id: 'fc-e1', source: 'fc-start', target: 'fc-msg-welcome' },
+    { id: 'fc-e2', source: 'fc-msg-welcome', target: 'fc-q-nome' },
+    { id: 'fc-e3', source: 'fc-q-nome', target: 'fc-q-segmento', sourceHandle: 'fc-q-nome-r1' },
+    { id: 'fc-e4', source: 'fc-q-segmento', target: 'fc-q-boas-vindas', sourceHandle: 'fc-q-segmento-r1' },
+    { id: 'fc-e5', source: 'fc-q-boas-vindas', target: 'fc-q-catalogo', sourceHandle: 'fc-q-boas-vindas-r1' },
+    { id: 'fc-e6', source: 'fc-q-catalogo', target: 'fc-q-horarios', sourceHandle: 'fc-q-catalogo-r1' },
+    { id: 'fc-e7', source: 'fc-q-horarios', target: 'fc-q-localizacao', sourceHandle: 'fc-q-horarios-r1' },
+    { id: 'fc-e8', source: 'fc-q-localizacao', target: 'fc-q-entrega', sourceHandle: 'fc-q-localizacao-r1' },
+    { id: 'fc-e9', source: 'fc-q-entrega', target: 'fc-q-prazo', sourceHandle: 'fc-q-entrega-r1' },
+    { id: 'fc-e10', source: 'fc-q-prazo', target: 'fc-q-produto', sourceHandle: 'fc-q-prazo-r1' },
+    { id: 'fc-e11', source: 'fc-q-produto', target: 'fc-q-tom', sourceHandle: 'fc-q-produto-r1' },
+    { id: 'fc-e12', source: 'fc-q-tom', target: 'fc-q-emojis', sourceHandle: 'fc-q-tom-r1' },
+    { id: 'fc-e13', source: 'fc-q-tom', target: 'fc-q-emojis', sourceHandle: 'fc-q-tom-r2' },
+    { id: 'fc-e14', source: 'fc-q-tom', target: 'fc-q-emojis', sourceHandle: 'fc-q-tom-r3' },
+    { id: 'fc-e15', source: 'fc-q-emojis', target: 'fc-q-quais-emojis', sourceHandle: 'fc-q-emojis-r1' },
+    { id: 'fc-e16', source: 'fc-q-emojis', target: 'fc-q-quais-emojis', sourceHandle: 'fc-q-emojis-r2' },
+    { id: 'fc-e17', source: 'fc-q-emojis', target: 'fc-q-mais-info', sourceHandle: 'fc-q-emojis-r3' },
+    { id: 'fc-e18', source: 'fc-q-quais-emojis', target: 'fc-q-mais-info', sourceHandle: 'fc-q-quais-emojis-r1' },
+    { id: 'fc-e19', source: 'fc-q-mais-info', target: 'fc-end', sourceHandle: 'fc-q-mais-info-r1' },
+  ],
+}
+
+const DEFAULTS: Record<FlowId, FlowDefinition> = {
+  'flow-a': FLOW_A,
+  'flow-b': FLOW_B,
+  'flow-c': FLOW_C,
+}
+
+// ── localStorage fallback (used when Supabase is not configured) ─────────────
+
+function loadLocal(id: FlowId): FlowDefinition {
   try {
     const raw = localStorage.getItem(`waz-flow-${id}`)
-    if (raw) {
-      const parsed = JSON.parse(raw) as FlowDefinition
-      // Ensure scrapingEnabled matches the default when loading older saves
-      return { ...parsed, id }
-    }
-  } catch {
-    // ignore parse errors
-  }
+    if (raw) return { ...JSON.parse(raw) as FlowDefinition, id }
+  } catch { /* ignore */ }
   return DEFAULTS[id]
 }
 
-function persistFlow(flow: FlowDefinition) {
+function saveLocal(flow: FlowDefinition) {
   try {
     localStorage.setItem(`waz-flow-${flow.id}`, JSON.stringify(flow))
-  } catch {
-    // ignore storage errors (quota, private mode)
-  }
+  } catch { /* ignore */ }
 }
 
+// ── Hook ─────────────────────────────────────────────────────────────────────
+
 export function useFlow(id: FlowId) {
-  const [flow, setFlow] = useState<FlowDefinition>(() => loadFlow(id))
+  const [flow, setFlow] = useState<FlowDefinition>(() =>
+    supabase ? DEFAULTS[id] : loadLocal(id)
+  )
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Prevents applying a remote update that echoes back our own save
+  const isSaving = useRef(false)
+
+  useEffect(() => {
+    if (!supabase) return
+
+    // Initial load
+    supabase!
+      .from('flows')
+      .select('data')
+      .eq('id', id)
+      .single()
+      .then(({ data }) => {
+        setFlow(data ? { ...(data.data as FlowDefinition), id } : DEFAULTS[id])
+      })
+
+    // Real-time subscription
+    const channel = supabase!
+      .channel(`flow-${id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'flows', filter: `id=eq.${id}` },
+        (payload) => {
+          if (!isSaving.current && payload.new && 'data' in payload.new) {
+            setFlow({ ...(payload.new.data as FlowDefinition), id })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase!.removeChannel(channel) }
+  }, [id])
 
   const update = useCallback((f: FlowDefinition) => {
     setFlow(f)
-    persistFlow(f)
+
+    if (!supabase) {
+      saveLocal(f)
+      return
+    }
+
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    isSaving.current = true
+    saveTimer.current = setTimeout(async () => {
+      await supabase!.from('flows').upsert({ id: f.id, data: f })
+      isSaving.current = false
+    }, 500)
   }, [])
 
   const reset = useCallback(() => {
-    const fresh = DEFAULTS[id]
-    setFlow(fresh)
-    persistFlow(fresh)
-  }, [id])
+    update(DEFAULTS[id])
+  }, [id, update])
 
   const exportJSON = useCallback(() => {
     const json = JSON.stringify(flow, null, 2)
@@ -228,7 +608,6 @@ export function useFlow(id: FlowId) {
     reader.onload = (e) => {
       try {
         const parsed = JSON.parse(e.target?.result as string) as FlowDefinition
-        // Force the id to match this flow slot
         update({ ...parsed, id })
       } catch {
         alert('Arquivo JSON inválido.')

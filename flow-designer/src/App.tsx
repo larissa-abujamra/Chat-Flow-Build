@@ -1,63 +1,53 @@
-import { Switch, Route, Redirect } from 'wouter'
+import { Switch, Route, Redirect, useLocation } from 'wouter'
 import { lazy, Suspense } from 'react'
 import Navbar from '@/components/Navbar'
 import FlowEditor from '@/pages/FlowEditor'
-import type { FlowId } from '@/types'
+import PreviewPage from '@/pages/PreviewPage'
 
 // Lazy-loaded so the large onboarding bundle never weighs down the flow designer.
-// `/onboarding` is the real end-user experience (the full-screen wizard).
-// `/onboarding/editor` is the internal step/copy editor (named export OnboardingPreview
-// lives in the same module; the default export is the editor).
+// `/onboarding` is the real end-user experience (the full-screen wizard);
+// `/onboarding/editor` is the internal step/copy editor (default export).
 const OnboardingApp = lazy(() =>
   import('@/pages/onboarding/OnboardingFlow').then((m) => ({ default: m.OnboardingPreview })),
 )
 const OnboardingEditor = lazy(() => import('@/pages/onboarding/OnboardingFlow'))
 
-// The flow designer keeps its original chrome (top Navbar + editor).
-function FlowLayout({ flowId }: { flowId: FlowId }) {
-  return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
-      <Navbar />
-      <FlowEditor flowId={flowId} />
-    </div>
-  )
-}
+const onbFallback = (
+  <div className="flex h-screen items-center justify-center text-gray-400">Carregando…</div>
+)
 
 export default function App() {
+  const [location] = useLocation()
+  // Full-screen experiences that should not show the flow-designer navbar.
+  const chromeless = location.startsWith('/preview') || location.startsWith('/onboarding')
+
   return (
-    <Switch>
-      <Route path="/" component={() => <Redirect to="/flow-a" />} />
+    <div className="flex flex-col h-screen overflow-hidden bg-background">
+      {!chromeless && <Navbar />}
+      <Switch>
+        <Route path="/" component={() => <Redirect to="/flow-a" />} />
+        <Route path="/flow-a" component={() => <FlowEditor flowId="flow-a" />} />
+        <Route path="/flow-b" component={() => <FlowEditor flowId="flow-b" />} />
+        <Route path="/flow-c" component={() => <FlowEditor flowId="flow-c" />} />
+        <Route path="/preview/flow-a" component={() => <PreviewPage flowId="flow-a" />} />
+        <Route path="/preview/flow-b" component={() => <PreviewPage flowId="flow-b" />} />
+        <Route path="/preview/flow-c" component={() => <PreviewPage flowId="flow-c" />} />
 
-      {/* Internal step/copy editor for the onboarding (kept for the team). */}
-      <Route path="/onboarding/editor">
-        <Suspense
-          fallback={
-            <div className="flex h-screen items-center justify-center text-gray-400">
-              Carregando…
-            </div>
-          }
-        >
-          <OnboardingEditor />
-        </Suspense>
-      </Route>
+        {/* Internal step/copy editor for the onboarding (kept for the team). */}
+        <Route path="/onboarding/editor">
+          <Suspense fallback={onbFallback}>
+            <OnboardingEditor />
+          </Suspense>
+        </Route>
+        {/* Standalone full-screen onboarding wizard — the real end-user experience. */}
+        <Route path="/onboarding">
+          <Suspense fallback={onbFallback}>
+            <OnboardingApp />
+          </Suspense>
+        </Route>
 
-      {/* Standalone full-screen onboarding wizard — the real end-user experience. */}
-      <Route path="/onboarding">
-        <Suspense
-          fallback={
-            <div className="flex h-screen items-center justify-center text-gray-400">
-              Carregando…
-            </div>
-          }
-        >
-          <OnboardingApp />
-        </Suspense>
-      </Route>
-
-      <Route path="/flow-a" component={() => <FlowLayout flowId="flow-a" />} />
-      <Route path="/flow-b" component={() => <FlowLayout flowId="flow-b" />} />
-      <Route path="/flow-c" component={() => <FlowLayout flowId="flow-c" />} />
-      <Route component={() => <Redirect to="/flow-a" />} />
-    </Switch>
+        <Route component={() => <Redirect to="/flow-a" />} />
+      </Switch>
+    </div>
   )
 }
