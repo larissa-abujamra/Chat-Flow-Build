@@ -990,27 +990,6 @@ const FLOW_FINAL: FlowDefinition = {
       data: { type: 'action', kind: 'custom', label: 'Ler catálogo (PDF) → /api/ocr' },
     },
     {
-      id: 'ff-q-horarios',
-      type: 'question',
-      position: { x: 300, y: 3820 },
-      data: {
-        type: 'question',
-        texto:
-          'Quais são os seus dias e horários de funcionamento? Pode ser detalhado: dias diferentes, horários diferentes, exceções.',
-        opcoes: [{ id: 'ff-q-horarios-r1', label: 'Horários' }],
-      },
-    },
-    {
-      id: 'ff-q-local',
-      type: 'question',
-      position: { x: 300, y: 4060 },
-      data: {
-        type: 'question',
-        texto: 'Onde fica seu negócio? Bairro, cidade e onde faz entrega',
-        opcoes: [{ id: 'ff-q-local-r1', label: 'Localização' }],
-      },
-    },
-    {
       id: 'ff-q-entrega',
       type: 'question',
       position: { x: 300, y: 4260 },
@@ -1028,16 +1007,6 @@ const FLOW_FINAL: FlowDefinition = {
         type: 'question',
         texto: 'Qual é o prazo mínimo para encomendas?',
         opcoes: [{ id: 'ff-q-prazo-r1', label: 'Prazo mínimo' }],
-      },
-    },
-    {
-      id: 'ff-q-produto',
-      type: 'question',
-      position: { x: 300, y: 4660 },
-      data: {
-        type: 'question',
-        texto: 'Qual o produto mais vendido? Conte o nome, a faixa de preço e o diferencial.',
-        opcoes: [{ id: 'ff-q-produto-r1', label: 'Produto carro-chefe' }],
       },
     },
     {
@@ -1104,14 +1073,11 @@ const FLOW_FINAL: FlowDefinition = {
     { id: 'ff-e16', source: 'ff-q-instagram', target: 'ff-q-boasvindas', sourceHandle: 'ff-q-instagram-r1' },
     { id: 'ff-e17', source: 'ff-q-boasvindas', target: 'ff-q-catalogo-msg', sourceHandle: 'ff-q-boasvindas-r1' },
     { id: 'ff-e18', source: 'ff-q-catalogo-msg', target: 'ff-q-anexar', sourceHandle: 'ff-q-catalogo-msg-r1' },
-    { id: 'ff-e19', source: 'ff-q-catalogo-msg', target: 'ff-q-horarios', sourceHandle: 'ff-q-catalogo-msg-r2' },
+    { id: 'ff-e19', source: 'ff-q-catalogo-msg', target: 'ff-q-entrega', sourceHandle: 'ff-q-catalogo-msg-r2' },
     { id: 'ff-e20', source: 'ff-q-anexar', target: 'ff-act-ocr', sourceHandle: 'ff-q-anexar-r1' },
-    { id: 'ff-e21', source: 'ff-act-ocr', target: 'ff-q-horarios' },
-    { id: 'ff-e22', source: 'ff-q-horarios', target: 'ff-q-local', sourceHandle: 'ff-q-horarios-r1' },
-    { id: 'ff-e23', source: 'ff-q-local', target: 'ff-q-entrega', sourceHandle: 'ff-q-local-r1' },
+    { id: 'ff-e21', source: 'ff-act-ocr', target: 'ff-q-entrega' },
     { id: 'ff-e24', source: 'ff-q-entrega', target: 'ff-q-prazo', sourceHandle: 'ff-q-entrega-r1' },
-    { id: 'ff-e25', source: 'ff-q-prazo', target: 'ff-q-produto', sourceHandle: 'ff-q-prazo-r1' },
-    { id: 'ff-e26', source: 'ff-q-produto', target: 'ff-act-tom', sourceHandle: 'ff-q-produto-r1' },
+    { id: 'ff-e25', source: 'ff-q-prazo', target: 'ff-act-tom', sourceHandle: 'ff-q-prazo-r1' },
     { id: 'ff-e27', source: 'ff-act-tom', target: 'ff-q-tom' },
     { id: 'ff-e28', source: 'ff-q-tom', target: 'ff-q-mais', sourceHandle: 'ff-q-tom-r1' },
     { id: 'ff-e29', source: 'ff-q-tom', target: 'ff-q-mais', sourceHandle: 'ff-q-tom-r2' },
