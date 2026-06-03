@@ -18,22 +18,13 @@ import { Button } from './ui/button'
 // ── Orb ──────────────────────────────────────────────────────────────────────
 
 export function Orb({ size = 36 }: { size?: number }) {
-  const s = size
   return (
-    <div
-      style={{
-        width: s,
-        height: s,
-        borderRadius: '50%',
-        flexShrink: 0,
-        background:
-          'radial-gradient(circle at 36% 30%, #fda4af 0%, #fb7185 14%, #22c55e 46%, #3b82f6 78%, #1d4ed8 100%)',
-        boxShadow: [
-          `inset -${Math.round(s * 0.11)}px -${Math.round(s * 0.11)}px ${Math.round(s * 0.22)}px rgba(0,0,0,0.28)`,
-          `inset ${Math.round(s * 0.06)}px ${Math.round(s * 0.06)}px ${Math.round(s * 0.14)}px rgba(255,255,255,0.45)`,
-          `0 ${Math.round(s * 0.1)}px ${Math.round(s * 0.32)}px rgba(34,197,94,0.22)`,
-        ].join(', '),
-      }}
+    <img
+      src="/orbe.png"
+      alt="Orbe"
+      width={size}
+      height={size}
+      style={{ flexShrink: 0, borderRadius: '50%', objectFit: 'cover' }}
     />
   )
 }
