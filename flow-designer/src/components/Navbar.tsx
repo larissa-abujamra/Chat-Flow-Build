@@ -15,12 +15,7 @@ export default function Navbar() {
     <nav className="h-12 flex items-center border-b border-border bg-card px-4 shrink-0 gap-4 z-30">
       {/* Brand */}
       <div className="flex items-center gap-2 mr-2">
-        <span
-          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
-          style={{ background: 'hsl(var(--waz))' }}
-        >
-          W
-        </span>
+        <img src="/orbe.png" alt="Orbe" className="w-7 h-7 rounded-full object-cover" />
         <span className="font-bold text-sm tracking-tight">Flow Designer</span>
       </div>
 
