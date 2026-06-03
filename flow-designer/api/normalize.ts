@@ -35,18 +35,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           {
             role: "system",
             content:
-              "Você normaliza textos que um usuário brasileiro digitou. Apenas conserte a grafia: capitalização correta, acentuação e expansão de abreviações/apelidos comuns de cidades. NUNCA invente, traduza ou troque o nome por outro negócio; se não reconhecer, só ajuste capitalização e acentos. Responda SOMENTE com JSON válido, sem markdown.",
+              "Você normaliza APENAS o nome de uma cidade brasileira que um usuário digitou: conserte capitalização, acentuação e expanda abreviações/apelidos comuns. NUNCA invente nem troque por outra cidade; se não reconhecer, só ajuste capitalização e acentos. Responda SOMENTE com JSON válido, sem markdown.",
           },
           {
             role: "user",
             content:
-              `Normalize os campos a seguir (deixe vazio o que vier vazio):\n` +
-              `nome do negócio: "${business}"\n` +
+              `Normalize SOMENTE a cidade a seguir (deixe vazio se vier vazio):\n` +
               `cidade: "${city}"\n\n` +
-              `Para a cidade, escreva o nome oficial com acentos e, quando óbvio, no formato "Cidade - UF" ` +
+              `Escreva o nome oficial com acentos e, quando óbvio, no formato "Cidade - UF" ` +
               `(ex.: "sp"/"sampa"/"sao paulo" → "São Paulo - SP"; "rj" → "Rio de Janeiro - RJ"; "bh" → "Belo Horizonte - MG"; "poa" → "Porto Alegre - RS"). ` +
-              `Para o nome do negócio, use capitalização e acentos corretos, preservando siglas/estilizações próprias da marca. ` +
-              `Retorne EXATO: {"business":"...","city":"..."}.`,
+              `Retorne EXATO: {"city":"..."}.`,
           },
         ],
         max_tokens: 200,
@@ -55,10 +53,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!orRes.ok) { res.status(200).json({ business, city }); return; }
     const data: any = await orRes.json();
     const parsed = extractJson(data?.choices?.[0]?.message?.content || "");
-    // Fallback para o valor digitado se o modelo devolver vazio.
-    const outBiz = String(parsed.business || "").trim() || business;
+    // Nome do negócio: mantém EXATAMENTE como o usuário digitou (não corrige).
+    // Só a cidade é normalizada; cai pro valor digitado se o modelo vier vazio.
     const outCity = String(parsed.city || "").trim() || city;
-    res.status(200).json({ business: outBiz, city: outCity }); return;
+    res.status(200).json({ business, city: outCity }); return;
   } catch {
     // Falha inesperada: devolve o que foi digitado, sem quebrar o fluxo.
     res.status(200).json({ business, city }); return;
