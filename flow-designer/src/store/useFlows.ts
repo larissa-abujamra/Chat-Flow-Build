@@ -724,25 +724,25 @@ const FS_STEP_MAP: Record<string, string> = {
   'fs-end': 'features',
 }
 
-function withStepIds(flow: FlowDefinition): FlowDefinition {
+function withStepIds(flow: FlowDefinition, map: Record<string, string>): FlowDefinition {
   return {
     ...flow,
     nodes: flow.nodes.map((n) =>
-      FS_STEP_MAP[n.id]
-        ? { ...n, data: { ...n.data, stepId: FS_STEP_MAP[n.id] } }
+      map[n.id]
+        ? { ...n, data: { ...n.data, stepId: map[n.id] } }
         : n,
     ),
   }
 }
 
-const FLOW_STEFANO: FlowDefinition = withStepIds(FLOW_STEFANO_BASE)
+const FLOW_STEFANO: FlowDefinition = withStepIds(FLOW_STEFANO_BASE, FS_STEP_MAP)
 
 // Flow Final — onboarding completo do Squad como grafo. Cada etapa de
 // enriquecimento é um nó de ação cujo label aponta o endpoint /api real que a
 // experiência ao vivo (/onboarding) chama. Usa os 4 kinds existentes (mesma
 // convenção do Fluxo Stefano). Placeholders {nome}/{negocio}/{cidade}/{site}
 // são literais no preview de design; o wizard ao vivo substitui pelos valores.
-const FLOW_FINAL: FlowDefinition = {
+const FLOW_FINAL_BASE: FlowDefinition = {
   id: 'flow-final',
   nome: 'Flow Final - Squad',
   scrapingEnabled: true,
@@ -822,8 +822,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 1660 },
       data: {
         type: 'question',
-        texto:
-          'Achei esses resultados. Qual é o seu?\n\n1 · Brigadayros — R. Simão Álvares, 29, Pinheiros\n2 · Brigadayros — Vila Madalena\n3 · Nenhum desses',
+        texto: 'Achei esses resultados. Qual é o seu?',
         opcoes: [
           { id: 'ff-q-resultado-r1', label: '1 · Pinheiros' },
           { id: 'ff-q-resultado-r2', label: '2 · Vila Madalena' },
@@ -837,8 +836,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 1900 },
       data: {
         type: 'question',
-        texto:
-          'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:\n\n📍 R. Simão Álvares, 29 - Pinheiros, São Paulo - SP, 05417-030\n📞 (11) 91234-5678',
+        texto: 'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:',
         opcoes: [{ id: 'ff-q-endereco-r1', label: 'Está tudo certo' }],
       },
     },
@@ -849,7 +847,7 @@ const FLOW_FINAL: FlowDefinition = {
       data: {
         type: 'question',
         texto:
-          'Achei o site do {negocio}: brigadayros.com.br\n\nÉ esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
+          'Achei o site do {negocio}. É esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
         opcoes: [{ id: 'ff-q-site-r1', label: 'Sim' }],
       },
     },
@@ -871,7 +869,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 2660 },
       data: {
         type: 'question',
-        texto: 'Encontrei esse Instagram aqui, seria seu?\n\n@brigadayros',
+        texto: 'Encontrei esse Instagram aqui, seria seu?',
         opcoes: [{ id: 'ff-q-instagram-r1', label: 'Sim' }],
       },
     },
@@ -977,8 +975,7 @@ const FLOW_FINAL: FlowDefinition = {
       position: { x: 300, y: 5020 },
       data: {
         type: 'question',
-        texto:
-          'Com base no seu site e Instagram, criei esse tom de voz para você! O que achou?\n\n— exemplo —\nCliente: vcs fazem brigadeiro de pistache?\nWaz: Oii! 😋 Fazemos sim, fica uma delícia. Quer que eu monte um orçamento pra você?',
+        texto: 'Com base no seu site e Instagram, criei esse tom de voz para você! O que achou?',
         opcoes: [
           { id: 'ff-q-tom-r1', label: 'Gostei' },
           { id: 'ff-q-tom-r2', label: 'Quero ajustar' },
@@ -1046,6 +1043,30 @@ const FLOW_FINAL: FlowDefinition = {
     { id: 'ff-e32', source: 'ff-msg-testar', target: 'ff-end' },
   ],
 }
+
+// Liga os nós do Flow Final às etapas do onboarding real → fluxo adaptativo: o
+// wizard roda com DADOS AO VIVO (Places/CNPJ/Instagram/iFood/catálogo/tom) do
+// negócio que o usuário digitar, reformado pela ordem/textos do Flow Final. Os
+// nós extras do Flow Final (boas-vindas, anexar PDF, horários, entrega, prazo,
+// "mais info") não têm etapa equivalente no wizard e são ignorados aqui.
+const FF_STEP_MAP: Record<string, string> = {
+  'ff-msg-welcome': 'welcome',
+  'ff-q-empresa': 'welcome',
+  'ff-q-cidade': 'ask_city',
+  'ff-q-resultado': 'place_pick',
+  'ff-q-endereco': 'confirm_contact',
+  'ff-q-site': 'confirm_site',
+  'ff-q-instagram': 'instagram',
+  'ff-act-redes': 'ifood',
+  'ff-act-ocr': 'catalog',
+  'ff-q-produto': 'carro_chefe',
+  'ff-act-tom': 'tone_generated',
+  'ff-q-tom': 'tone_generated',
+  'ff-msg-testar': 'configured',
+  'ff-end': 'features',
+}
+
+const FLOW_FINAL: FlowDefinition = withStepIds(FLOW_FINAL_BASE, FF_STEP_MAP)
 
 const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
