@@ -56,7 +56,7 @@ export default function Navbar() {
         className="ml-auto flex items-center gap-2 group"
         title="Abrir o onboarding"
       >
-        <span className="eyebrow group-hover:text-foreground transition-colors">Waz Onboarding</span>
+        <span className="eyebrow group-hover:text-foreground transition-colors">Onboarding</span>
         <div className="h-4 w-16 rounded-full brand-gradient opacity-60 group-hover:opacity-100 transition-opacity" />
       </Link>
     </nav>
