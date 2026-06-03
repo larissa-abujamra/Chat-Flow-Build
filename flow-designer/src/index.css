@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  /* Squad brand agent colors */
+  --color-maky: hsl(var(--maky));
+  --color-waz: hsl(var(--waz));
+  --color-fin: hsl(var(--fin));
+  --color-ink-3: hsl(var(--ink-3));
+
+  --font-sans: 'Fustat', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Fustat', system-ui, -apple-system, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* Squad agent palette */
+  --maky: 329 86% 66%;   /* #f45dac — marketing (pink) */
+  --waz:  144 63% 48%;   /* #2dc76a — atendimento (green) */
+  --fin:  198 86% 61%;   /* #47bff1 — financeiro (blue) */
+  --ink-3: 218 11% 65%;  /* #9CA3AF — tertiary / metadata */
+
+  --brand-gradient: linear-gradient(90deg, hsl(var(--maky)), hsl(var(--waz)) 50%, hsl(var(--fin)));
+
+  /* Neutrals */
+  --background: 0 0% 100%;        /* #FFFFFF */
+  --foreground: 222 40% 11%;      /* #111827 */
+  --border: 220 13% 91%;          /* #E5E7EB */
+  --input: 220 13% 91%;
+  --ring: 222 40% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 40% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 40% 11%;
+
+  --primary: 222 40% 11%;         /* ink — solid buttons */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 20% 98%;       /* #F9FAFB */
+  --secondary-foreground: 222 40% 11%;
+
+  --muted: 220 14% 96%;           /* #F3F4F6 */
+  --muted-foreground: 220 9% 46%; /* #6B7280 */
+
+  --accent: 144 63% 95%;
+  --accent-foreground: 144 63% 24%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border box-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  h1, h2, h3, h4 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer components {
+  /* Squad signature micro-label */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: hsl(var(--ink-3));
+  }
+
+  .brand-gradient {
+    background: var(--brand-gradient);
+  }
+
+  .brand-text {
+    background: var(--brand-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Typing indicator dots */
+  .typing-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    background: hsl(var(--ink-3));
+    opacity: 0.45;
+    animation: typing-bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.18s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.36s; }
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-0.18rem); opacity: 0.85; }
+}
+
+/* React Flow overrides */
+.react-flow__node {
+  font-family: var(--font-sans);
+}
+.react-flow__handle {
+  transition: transform 0.1s;
+}
+.react-flow__handle:hover {
+  transform: scale(1.3);
+}
