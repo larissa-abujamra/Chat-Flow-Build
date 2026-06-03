@@ -534,6 +534,7 @@ const FLOW_STEFANO: FlowDefinition = {
         type: 'question',
         texto: 'Pra configurar tudo certinho, me conta: qual o nome do seu negócio?',
         opcoes: [{ id: 'fs-q-nome-r1', label: 'Nome do negócio' }],
+        salvarComo: 'negocio',
       },
     },
     {
@@ -544,6 +545,7 @@ const FLOW_STEFANO: FlowDefinition = {
         type: 'question',
         texto: 'Em qual cidade fica o {negocio}?',
         opcoes: [{ id: 'fs-q-cidade-r1', label: 'Cidade / estado' }],
+        salvarComo: 'cidade',
       },
     },
     {
@@ -701,11 +703,322 @@ const FLOW_STEFANO: FlowDefinition = {
   ],
 }
 
+// Flow Final — onboarding completo do Squad como grafo. Cada etapa de
+// enriquecimento é um nó de ação cujo label aponta o endpoint /api real que a
+// experiência ao vivo (/onboarding) chama. Usa os 4 kinds existentes (mesma
+// convenção do Fluxo Stefano). Placeholders {nome}/{negocio}/{cidade}/{site}
+// são literais no preview de design; o wizard ao vivo substitui pelos valores.
+const FLOW_FINAL: FlowDefinition = {
+  id: 'flow-final',
+  nome: 'Flow Final - Squad',
+  scrapingEnabled: true,
+  nodes: [
+    { id: 'ff-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
+    {
+      id: 'ff-q-nome',
+      type: 'question',
+      position: { x: 300, y: 200 },
+      data: {
+        type: 'question',
+        texto: 'Bem-vindo ao Squad! 👋\n\nComo podemos te chamar?',
+        opcoes: [{ id: 'ff-q-nome-r1', label: 'Nome' }],
+        salvarComo: 'nome',
+      },
+    },
+    {
+      id: 'ff-msg-welcome',
+      type: 'message',
+      position: { x: 300, y: 420 },
+      data: {
+        type: 'message',
+        texto:
+          'Oi {nome}, bem-vindo ao Squad! 👋\n\nSou o assistente do Squad e vou te ajudar a levar seu negócio ainda mais longe.\n\nA partir de agora você conta com um time trabalhando 24/7 por você:\n\n📣 Maky, seu marketing\n📱 Waz, suas vendas e atendimento\n💰 Fin, seu financeiro',
+      },
+    },
+    {
+      id: 'ff-q-empresa',
+      type: 'question',
+      position: { x: 300, y: 720 },
+      data: {
+        type: 'question',
+        texto: 'Vamos começar pelo básico: pra começar, qual é o nome da sua empresa?',
+        opcoes: [{ id: 'ff-q-empresa-r1', label: 'Nome da empresa' }],
+        salvarComo: 'negocio',
+      },
+    },
+    {
+      id: 'ff-q-cidade',
+      type: 'question',
+      position: { x: 300, y: 920 },
+      data: {
+        type: 'question',
+        texto: 'Em qual cidade fica o {negocio}?',
+        opcoes: [{ id: 'ff-q-cidade-r1', label: 'Cidade' }],
+        salvarComo: 'cidade',
+      },
+    },
+    {
+      id: 'ff-q-segmento',
+      type: 'question',
+      position: { x: 300, y: 1120 },
+      data: {
+        type: 'question',
+        texto: 'E em qual segmento a {negocio} atua?',
+        opcoes: [{ id: 'ff-q-segmento-r1', label: 'Segmento' }],
+      },
+    },
+    {
+      id: 'ff-msg-procurando',
+      type: 'message',
+      position: { x: 300, y: 1320 },
+      data: {
+        type: 'message',
+        texto: 'Boa! Já vou procurar o {negocio} em {cidade} aqui em segundo plano enquanto a gente continua 👀',
+      },
+    },
+    {
+      id: 'ff-act-places',
+      type: 'action',
+      position: { x: 300, y: 1520 },
+      data: { type: 'action', kind: 'scraping', label: 'Buscar negócio → /api/places' },
+    },
+    {
+      id: 'ff-q-resultado',
+      type: 'question',
+      position: { x: 300, y: 1660 },
+      data: {
+        type: 'question',
+        texto:
+          'Achei esses resultados. Qual é o seu?\n\n1 · Brigadayros — R. Simão Álvares, 29, Pinheiros\n2 · Brigadayros — Vila Madalena\n3 · Nenhum desses',
+        opcoes: [
+          { id: 'ff-q-resultado-r1', label: '1 · Pinheiros' },
+          { id: 'ff-q-resultado-r2', label: '2 · Vila Madalena' },
+          { id: 'ff-q-resultado-r3', label: 'Nenhum desses' },
+        ],
+      },
+    },
+    {
+      id: 'ff-q-endereco',
+      type: 'question',
+      position: { x: 300, y: 1900 },
+      data: {
+        type: 'question',
+        texto:
+          'Peguei o endereço e o telefone do seu negócio. Confere se está tudo certo:\n\n📍 R. Simão Álvares, 29 - Pinheiros, São Paulo - SP, 05417-030\n📞 (11) 91234-5678',
+        opcoes: [{ id: 'ff-q-endereco-r1', label: 'Está tudo certo' }],
+      },
+    },
+    {
+      id: 'ff-q-site',
+      type: 'question',
+      position: { x: 300, y: 2140 },
+      data: {
+        type: 'question',
+        texto:
+          'Achei o site do {negocio}: brigadayros.com.br\n\nÉ esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
+        opcoes: [{ id: 'ff-q-site-r1', label: 'Sim' }],
+      },
+    },
+    {
+      id: 'ff-act-sitescrape',
+      type: 'action',
+      position: { x: 300, y: 2380 },
+      data: { type: 'action', kind: 'scraping', label: 'Extrair do site → /api/site-scrape + /api/catalog' },
+    },
+    {
+      id: 'ff-act-redes',
+      type: 'action',
+      position: { x: 300, y: 2520 },
+      data: { type: 'action', kind: 'conectar-instagram', label: 'Instagram + iFood → /api/instagram, /api/ifood' },
+    },
+    {
+      id: 'ff-q-instagram',
+      type: 'question',
+      position: { x: 300, y: 2660 },
+      data: {
+        type: 'question',
+        texto: 'Encontrei esse Instagram aqui, seria seu?\n\n@brigadayros',
+        opcoes: [{ id: 'ff-q-instagram-r1', label: 'Sim' }],
+      },
+    },
+    {
+      id: 'ff-q-boasvindas',
+      type: 'question',
+      position: { x: 300, y: 2900 },
+      data: {
+        type: 'question',
+        texto: 'Você já tem uma mensagem de boas-vindas?',
+        opcoes: [{ id: 'ff-q-boasvindas-r1', label: 'Mensagem de boas-vindas' }],
+      },
+    },
+    {
+      id: 'ff-q-catalogo-msg',
+      type: 'question',
+      position: { x: 300, y: 3140 },
+      data: {
+        type: 'question',
+        texto: 'Gostaria de enviar seu catálogo de produtos na sua mensagem de boas-vindas?',
+        opcoes: [
+          { id: 'ff-q-catalogo-msg-r1', label: 'Sim' },
+          { id: 'ff-q-catalogo-msg-r2', label: 'Não' },
+        ],
+      },
+    },
+    {
+      id: 'ff-q-anexar',
+      type: 'question',
+      position: { x: 600, y: 3380 },
+      data: {
+        type: 'question',
+        texto: 'Show! Poderia anexar aqui, por favor?',
+        opcoes: [{ id: 'ff-q-anexar-r1', label: 'cardapio.pdf' }],
+      },
+    },
+    {
+      id: 'ff-act-ocr',
+      type: 'action',
+      position: { x: 600, y: 3620 },
+      data: { type: 'action', kind: 'custom', label: 'Ler catálogo (PDF) → /api/ocr' },
+    },
+    {
+      id: 'ff-q-horarios',
+      type: 'question',
+      position: { x: 300, y: 3820 },
+      data: {
+        type: 'question',
+        texto:
+          'Quais são os seus dias e horários de funcionamento? Pode ser detalhado: dias diferentes, horários diferentes, exceções.',
+        opcoes: [{ id: 'ff-q-horarios-r1', label: 'Horários' }],
+      },
+    },
+    {
+      id: 'ff-q-local',
+      type: 'question',
+      position: { x: 300, y: 4060 },
+      data: {
+        type: 'question',
+        texto: 'Onde fica seu negócio? Bairro, cidade e onde faz entrega',
+        opcoes: [{ id: 'ff-q-local-r1', label: 'Localização' }],
+      },
+    },
+    {
+      id: 'ff-q-entrega',
+      type: 'question',
+      position: { x: 300, y: 4260 },
+      data: {
+        type: 'question',
+        texto: 'Vocês fazem entrega ou retirada?',
+        opcoes: [{ id: 'ff-q-entrega-r1', label: 'Entrega / retirada' }],
+      },
+    },
+    {
+      id: 'ff-q-prazo',
+      type: 'question',
+      position: { x: 300, y: 4460 },
+      data: {
+        type: 'question',
+        texto: 'Qual é o prazo mínimo para encomendas?',
+        opcoes: [{ id: 'ff-q-prazo-r1', label: 'Prazo mínimo' }],
+      },
+    },
+    {
+      id: 'ff-q-produto',
+      type: 'question',
+      position: { x: 300, y: 4660 },
+      data: {
+        type: 'question',
+        texto: 'Qual o produto mais vendido? Conte o nome, a faixa de preço e o diferencial.',
+        opcoes: [{ id: 'ff-q-produto-r1', label: 'Produto carro-chefe' }],
+      },
+    },
+    {
+      id: 'ff-act-tom',
+      type: 'action',
+      position: { x: 300, y: 4880 },
+      data: { type: 'action', kind: 'gerar-tom', label: 'Gerar tom de voz → /api/tone-from-text + /api/research' },
+    },
+    {
+      id: 'ff-q-tom',
+      type: 'question',
+      position: { x: 300, y: 5020 },
+      data: {
+        type: 'question',
+        texto:
+          'Com base no seu site e Instagram, criei esse tom de voz para você! O que achou?\n\n— exemplo —\nCliente: vcs fazem brigadeiro de pistache?\nWaz: Oii! 😋 Fazemos sim, fica uma delícia. Quer que eu monte um orçamento pra você?',
+        opcoes: [
+          { id: 'ff-q-tom-r1', label: 'Gostei' },
+          { id: 'ff-q-tom-r2', label: 'Quero ajustar' },
+        ],
+      },
+    },
+    {
+      id: 'ff-q-mais',
+      type: 'question',
+      position: { x: 300, y: 5320 },
+      data: {
+        type: 'question',
+        texto: 'Tem mais alguma coisa importante que o agente precisa saber?',
+        opcoes: [
+          { id: 'ff-q-mais-r1', label: 'Por agora não' },
+          { id: 'ff-q-mais-r2', label: 'Adicionar info' },
+        ],
+      },
+    },
+    {
+      id: 'ff-msg-testar',
+      type: 'message',
+      position: { x: 300, y: 5560 },
+      data: { type: 'message', texto: 'Perfeito! Vamos testar seu atendimento? 🚀' },
+    },
+    {
+      id: 'ff-end',
+      type: 'end',
+      position: { x: 300, y: 5760 },
+      data: { type: 'end', texto: 'Iniciar fluxo de teste 🚀' },
+    },
+  ],
+  edges: [
+    { id: 'ff-e1', source: 'ff-start', target: 'ff-q-nome' },
+    { id: 'ff-e2', source: 'ff-q-nome', target: 'ff-msg-welcome', sourceHandle: 'ff-q-nome-r1' },
+    { id: 'ff-e3', source: 'ff-msg-welcome', target: 'ff-q-empresa' },
+    { id: 'ff-e4', source: 'ff-q-empresa', target: 'ff-q-cidade', sourceHandle: 'ff-q-empresa-r1' },
+    { id: 'ff-e5', source: 'ff-q-cidade', target: 'ff-q-segmento', sourceHandle: 'ff-q-cidade-r1' },
+    { id: 'ff-e6', source: 'ff-q-segmento', target: 'ff-msg-procurando', sourceHandle: 'ff-q-segmento-r1' },
+    { id: 'ff-e7', source: 'ff-msg-procurando', target: 'ff-act-places' },
+    { id: 'ff-e8', source: 'ff-act-places', target: 'ff-q-resultado' },
+    { id: 'ff-e9', source: 'ff-q-resultado', target: 'ff-q-endereco', sourceHandle: 'ff-q-resultado-r1' },
+    { id: 'ff-e10', source: 'ff-q-resultado', target: 'ff-q-endereco', sourceHandle: 'ff-q-resultado-r2' },
+    { id: 'ff-e11', source: 'ff-q-resultado', target: 'ff-q-endereco', sourceHandle: 'ff-q-resultado-r3' },
+    { id: 'ff-e12', source: 'ff-q-endereco', target: 'ff-q-site', sourceHandle: 'ff-q-endereco-r1' },
+    { id: 'ff-e13', source: 'ff-q-site', target: 'ff-act-sitescrape', sourceHandle: 'ff-q-site-r1' },
+    { id: 'ff-e14', source: 'ff-act-sitescrape', target: 'ff-act-redes' },
+    { id: 'ff-e15', source: 'ff-act-redes', target: 'ff-q-instagram' },
+    { id: 'ff-e16', source: 'ff-q-instagram', target: 'ff-q-boasvindas', sourceHandle: 'ff-q-instagram-r1' },
+    { id: 'ff-e17', source: 'ff-q-boasvindas', target: 'ff-q-catalogo-msg', sourceHandle: 'ff-q-boasvindas-r1' },
+    { id: 'ff-e18', source: 'ff-q-catalogo-msg', target: 'ff-q-anexar', sourceHandle: 'ff-q-catalogo-msg-r1' },
+    { id: 'ff-e19', source: 'ff-q-catalogo-msg', target: 'ff-q-horarios', sourceHandle: 'ff-q-catalogo-msg-r2' },
+    { id: 'ff-e20', source: 'ff-q-anexar', target: 'ff-act-ocr', sourceHandle: 'ff-q-anexar-r1' },
+    { id: 'ff-e21', source: 'ff-act-ocr', target: 'ff-q-horarios' },
+    { id: 'ff-e22', source: 'ff-q-horarios', target: 'ff-q-local', sourceHandle: 'ff-q-horarios-r1' },
+    { id: 'ff-e23', source: 'ff-q-local', target: 'ff-q-entrega', sourceHandle: 'ff-q-local-r1' },
+    { id: 'ff-e24', source: 'ff-q-entrega', target: 'ff-q-prazo', sourceHandle: 'ff-q-entrega-r1' },
+    { id: 'ff-e25', source: 'ff-q-prazo', target: 'ff-q-produto', sourceHandle: 'ff-q-prazo-r1' },
+    { id: 'ff-e26', source: 'ff-q-produto', target: 'ff-act-tom', sourceHandle: 'ff-q-produto-r1' },
+    { id: 'ff-e27', source: 'ff-act-tom', target: 'ff-q-tom' },
+    { id: 'ff-e28', source: 'ff-q-tom', target: 'ff-q-mais', sourceHandle: 'ff-q-tom-r1' },
+    { id: 'ff-e29', source: 'ff-q-tom', target: 'ff-q-mais', sourceHandle: 'ff-q-tom-r2' },
+    { id: 'ff-e30', source: 'ff-q-mais', target: 'ff-msg-testar', sourceHandle: 'ff-q-mais-r1' },
+    { id: 'ff-e31', source: 'ff-q-mais', target: 'ff-msg-testar', sourceHandle: 'ff-q-mais-r2' },
+    { id: 'ff-e32', source: 'ff-msg-testar', target: 'ff-end' },
+  ],
+}
+
 const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
   'flow-b': FLOW_B,
   'flow-c': FLOW_C,
   'flow-stefano': FLOW_STEFANO,
+  'flow-final': FLOW_FINAL,
 }
 
 function createEmptyFlow(id: string): FlowDefinition {
@@ -831,6 +1144,7 @@ const DEFAULT_TABS = [
   { id: 'flow-b', label: 'Fluxo B' },
   { id: 'flow-c', label: 'Fluxo C' },
   { id: 'flow-stefano', label: 'Fluxo Stefano' },
+  { id: 'flow-final', label: 'Flow Final' },
 ]
 
 export function useFlowList() {
