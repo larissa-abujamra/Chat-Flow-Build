@@ -507,10 +507,205 @@ const FLOW_C: FlowDefinition = {
   ],
 }
 
+// Fluxo Stefano — espelha o onboarding real "Squad" que testamos (a experiência
+// completa com CNPJ/Places/Instagram/iFood ao vivo). Os nós abaixo representam o
+// fluxo no canvas; o preview à direita roda a experiência real (OnboardingPreview).
+const FLOW_STEFANO: FlowDefinition = {
+  id: 'flow-stefano',
+  nome: 'Fluxo Stefano',
+  scrapingEnabled: true,
+  nodes: [
+    { id: 'fs-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
+    {
+      id: 'fs-msg-welcome',
+      type: 'message',
+      position: { x: 300, y: 200 },
+      data: {
+        type: 'message',
+        texto:
+          'Oi, {nome}, bem-vindo ao Squad! 👋\n\nSou o assistente do Squad e vou te ajudar a levar seu negócio ainda mais longe. Vou trabalhar 24/7 por você, cuidando do atendimento, do marketing e do financeiro.\n\nPra configurar tudo certinho, vou te fazer algumas perguntas rápidas.',
+      },
+    },
+    {
+      id: 'fs-q-nome',
+      type: 'question',
+      position: { x: 300, y: 460 },
+      data: {
+        type: 'question',
+        texto: 'Pra configurar tudo certinho, me conta: qual o nome do seu negócio?',
+        opcoes: [{ id: 'fs-q-nome-r1', label: 'Nome do negócio' }],
+      },
+    },
+    {
+      id: 'fs-q-cidade',
+      type: 'question',
+      position: { x: 300, y: 660 },
+      data: {
+        type: 'question',
+        texto: 'Em qual cidade fica o {negocio}?',
+        opcoes: [{ id: 'fs-q-cidade-r1', label: 'Cidade / estado' }],
+      },
+    },
+    {
+      id: 'fs-act-buscar',
+      type: 'action',
+      position: { x: 300, y: 860 },
+      data: { type: 'action', kind: 'scraping', label: 'Buscar negócio (Places + CNPJ)' },
+    },
+    {
+      id: 'fs-q-contato',
+      type: 'question',
+      position: { x: 300, y: 1000 },
+      data: {
+        type: 'question',
+        texto: 'Peguei o endereço e o telefone do seu negócio (CNPJ, endereço, telefone). Confere se está tudo certo:',
+        opcoes: [
+          { id: 'fs-q-contato-r1', label: 'Está certo' },
+          { id: 'fs-q-contato-r2', label: 'O CNPJ está errado' },
+        ],
+      },
+    },
+    {
+      id: 'fs-q-site',
+      type: 'question',
+      position: { x: 300, y: 1240 },
+      data: {
+        type: 'question',
+        texto: 'Achei o site do {negocio}. É esse mesmo? Vou usar pra puxar seu catálogo e suas informações de lá.',
+        opcoes: [
+          { id: 'fs-q-site-r1', label: 'Sim, é esse' },
+          { id: 'fs-q-site-r2', label: 'Corrigir link' },
+          { id: 'fs-q-site-r3', label: 'Não tenho site' },
+        ],
+      },
+    },
+    {
+      id: 'fs-act-instagram',
+      type: 'action',
+      position: { x: 300, y: 1480 },
+      data: { type: 'action', kind: 'conectar-instagram', label: 'Conectar Instagram' },
+    },
+    {
+      id: 'fs-q-ifood',
+      type: 'question',
+      position: { x: 300, y: 1620 },
+      data: {
+        type: 'question',
+        texto: 'Achei esta loja no iFood. É a sua? Posso importar seu cardápio com os preços de lá.',
+        opcoes: [
+          { id: 'fs-q-ifood-r1', label: 'Sim, é a minha loja' },
+          { id: 'fs-q-ifood-r2', label: 'Não é essa' },
+          { id: 'fs-q-ifood-r3', label: 'Não vendo no iFood' },
+        ],
+      },
+    },
+    {
+      id: 'fs-q-catalogo',
+      type: 'question',
+      position: { x: 300, y: 1860 },
+      data: {
+        type: 'question',
+        texto: 'Encontrei alguns produtos do seu catálogo. Confere se está certo:',
+        opcoes: [
+          { id: 'fs-q-catalogo-r1', label: 'Sim, é isso' },
+          { id: 'fs-q-catalogo-r2', label: 'Falta coisa' },
+        ],
+      },
+    },
+    {
+      id: 'fs-q-carrochefe',
+      type: 'question',
+      position: { x: 300, y: 2100 },
+      data: {
+        type: 'question',
+        texto: 'Qual desses é o carro-chefe?',
+        opcoes: [{ id: 'fs-q-carrochefe-r1', label: 'Produto carro-chefe' }],
+      },
+    },
+    {
+      id: 'fs-act-tom',
+      type: 'action',
+      position: { x: 300, y: 2300 },
+      data: { type: 'action', kind: 'gerar-tom', label: 'Gerar tom de voz' },
+    },
+    {
+      id: 'fs-q-tom',
+      type: 'question',
+      position: { x: 300, y: 2440 },
+      data: {
+        type: 'question',
+        texto: 'Pela pesquisa que fiz, seu tom me parece caloroso e informal — algo assim. Ficou a sua cara?',
+        opcoes: [
+          { id: 'fs-q-tom-r1', label: 'Sim, é meu tom' },
+          { id: 'fs-q-tom-r2', label: 'Aprender de uma conversa' },
+          { id: 'fs-q-tom-r3', label: 'Quero ajustar' },
+        ],
+      },
+    },
+    {
+      id: 'fs-q-emojis',
+      type: 'question',
+      position: { x: 300, y: 2680 },
+      data: {
+        type: 'question',
+        texto: 'E emojis — uso sempre, às vezes ou nunca?',
+        opcoes: [
+          { id: 'fs-q-emojis-r1', label: 'Sempre' },
+          { id: 'fs-q-emojis-r2', label: 'Às vezes' },
+          { id: 'fs-q-emojis-r3', label: 'Nunca' },
+        ],
+      },
+    },
+    {
+      id: 'fs-msg-configurado',
+      type: 'message',
+      position: { x: 300, y: 2920 },
+      data: {
+        type: 'message',
+        texto: 'Prontinho! Já sei quem você é e como falar. Bora ver o que eu sei fazer?',
+      },
+    },
+    {
+      id: 'fs-end',
+      type: 'end',
+      position: { x: 300, y: 3160 },
+      data: { type: 'end', texto: 'Ver funcionalidades 🚀' },
+    },
+  ],
+  edges: [
+    { id: 'fs-e1', source: 'fs-start', target: 'fs-msg-welcome' },
+    { id: 'fs-e2', source: 'fs-msg-welcome', target: 'fs-q-nome' },
+    { id: 'fs-e3', source: 'fs-q-nome', target: 'fs-q-cidade', sourceHandle: 'fs-q-nome-r1' },
+    { id: 'fs-e4', source: 'fs-q-cidade', target: 'fs-act-buscar', sourceHandle: 'fs-q-cidade-r1' },
+    { id: 'fs-e5', source: 'fs-act-buscar', target: 'fs-q-contato' },
+    { id: 'fs-e6', source: 'fs-q-contato', target: 'fs-q-site', sourceHandle: 'fs-q-contato-r1' },
+    { id: 'fs-e7', source: 'fs-q-contato', target: 'fs-q-site', sourceHandle: 'fs-q-contato-r2' },
+    { id: 'fs-e8', source: 'fs-q-site', target: 'fs-act-instagram', sourceHandle: 'fs-q-site-r1' },
+    { id: 'fs-e9', source: 'fs-q-site', target: 'fs-act-instagram', sourceHandle: 'fs-q-site-r2' },
+    { id: 'fs-e10', source: 'fs-q-site', target: 'fs-act-instagram', sourceHandle: 'fs-q-site-r3' },
+    { id: 'fs-e11', source: 'fs-act-instagram', target: 'fs-q-ifood' },
+    { id: 'fs-e12', source: 'fs-q-ifood', target: 'fs-q-catalogo', sourceHandle: 'fs-q-ifood-r1' },
+    { id: 'fs-e13', source: 'fs-q-ifood', target: 'fs-q-catalogo', sourceHandle: 'fs-q-ifood-r2' },
+    { id: 'fs-e14', source: 'fs-q-ifood', target: 'fs-q-catalogo', sourceHandle: 'fs-q-ifood-r3' },
+    { id: 'fs-e15', source: 'fs-q-catalogo', target: 'fs-q-carrochefe', sourceHandle: 'fs-q-catalogo-r1' },
+    { id: 'fs-e16', source: 'fs-q-catalogo', target: 'fs-q-carrochefe', sourceHandle: 'fs-q-catalogo-r2' },
+    { id: 'fs-e17', source: 'fs-q-carrochefe', target: 'fs-act-tom', sourceHandle: 'fs-q-carrochefe-r1' },
+    { id: 'fs-e18', source: 'fs-act-tom', target: 'fs-q-tom' },
+    { id: 'fs-e19', source: 'fs-q-tom', target: 'fs-q-emojis', sourceHandle: 'fs-q-tom-r1' },
+    { id: 'fs-e20', source: 'fs-q-tom', target: 'fs-q-emojis', sourceHandle: 'fs-q-tom-r2' },
+    { id: 'fs-e21', source: 'fs-q-tom', target: 'fs-q-emojis', sourceHandle: 'fs-q-tom-r3' },
+    { id: 'fs-e22', source: 'fs-q-emojis', target: 'fs-msg-configurado', sourceHandle: 'fs-q-emojis-r1' },
+    { id: 'fs-e23', source: 'fs-q-emojis', target: 'fs-msg-configurado', sourceHandle: 'fs-q-emojis-r2' },
+    { id: 'fs-e24', source: 'fs-q-emojis', target: 'fs-msg-configurado', sourceHandle: 'fs-q-emojis-r3' },
+    { id: 'fs-e25', source: 'fs-msg-configurado', target: 'fs-end' },
+  ],
+}
+
 const DEFAULTS: Record<string, FlowDefinition> = {
   'flow-a': FLOW_A,
   'flow-b': FLOW_B,
   'flow-c': FLOW_C,
+  'flow-stefano': FLOW_STEFANO,
 }
 
 function createEmptyFlow(id: string): FlowDefinition {
@@ -635,6 +830,7 @@ const DEFAULT_TABS = [
   { id: 'flow-a', label: 'Fluxo A' },
   { id: 'flow-b', label: 'Fluxo B' },
   { id: 'flow-c', label: 'Fluxo C' },
+  { id: 'flow-stefano', label: 'Fluxo Stefano' },
 ]
 
 export function useFlowList() {
