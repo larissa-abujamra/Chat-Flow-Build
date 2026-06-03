@@ -127,10 +127,11 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
           />
         </div>
 
-        {/* Right preview. Adaptive flows (with stepIds — Fluxo Stefano + new
-            flows) run the real Squad onboarding wizard, reshaped by the flow's
-            own nodes/order/texts. Other flows use the scripted ChatPreview. */}
-        {onboarding ? (
+        {/* Right preview. Adaptive flows run the real Squad onboarding wizard:
+            flows with stepIds (Fluxo Stefano + new flows) reshape it from their
+            own nodes/order/texts; Flow Final shows the full default wizard.
+            Other flows (A/B/C) use the scripted node-walker ChatPreview. */}
+        {onboarding || flowId === 'flow-final' ? (
           <div
             className="flex flex-col h-full bg-card border-l border-border shrink-0"
             style={{ width: 460 }}
@@ -142,7 +143,7 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
                 </div>
               }
             >
-              <OnboardingPreview embedded steps={onboarding.steps} overrides={onboarding.overrides} />
+              <OnboardingPreview embedded steps={onboarding?.steps} overrides={onboarding?.overrides} />
             </Suspense>
           </div>
         ) : (

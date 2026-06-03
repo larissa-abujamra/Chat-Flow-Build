@@ -521,7 +521,17 @@ export async function pickIfoodMatch(
   city: string,
   candidatos: IfoodCandidate[],
 ): Promise<IfoodCandidate | null> {
-  if (candidatos.length === 1) return candidatos[0];
+  // Fast-path: um único candidato que compartilha ao menos um token (não-stopword)
+  // do nome do negócio é aceito direto. SEM sobreposição, NÃO devolvemos cego —
+  // mandamos pro modelo decidir (pode responder -1). Isso evita falsos positivos
+  // tipo "Livraria Cultura" → "A Banca Shop - Tabacaria" (busca trouxe 1 loja não
+  // relacionada e o código antigo a aceitava sem checar).
+  if (candidatos.length === 1) {
+    const bizTokens = ifoodNormTokens(business).filter((t) => !IFOOD_STOPWORDS.has(t));
+    const nameTokens = new Set(ifoodNormTokens(candidatos[0].nome));
+    if (bizTokens.some((t) => nameTokens.has(t))) return candidatos[0];
+    // sem overlap → cai pro juiz do modelo abaixo (não retorna cego).
+  }
   try {
     const lista = candidatos.map((c, i) => `${i}: ${c.nome} — ${c.url}`).join("\n");
     const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -534,14 +544,16 @@ export async function pickIfoodMatch(
           {
             role: "system",
             content:
-              "Você decide qual resultado de busca é a loja oficial de um negócio no iFood. Escolha SOMENTE entre os candidatos fornecidos — nunca invente. Responda SOMENTE JSON.",
+              "Você decide qual resultado de busca é a loja oficial de um negócio no iFood. Escolha SOMENTE entre os candidatos fornecidos — nunca invente. " +
+              "Seja RIGOROSO: só escolha um candidato se o nome dele for plausivelmente a MESMA marca/negócio (mesmo nome ou variação clara). " +
+              "Ramo ou nome diferente NÃO corresponde (ex.: negócio 'Livraria Cultura' x loja 'A Banca Shop - Tabacaria' → -1). Na dúvida, use -1. Responda SOMENTE JSON.",
           },
           {
             role: "user",
             content:
               `Negócio: "${business}"${city ? `, cidade: "${city}"` : ""}.\n` +
               `Candidatos (índice: nome — url):\n${lista}\n\n` +
-              `Qual índice corresponde a esse negócio? Se NENHUM corresponder com confiança, use -1. Responda {"index": <número>}.`,
+              `Qual índice é a loja DESSE negócio (mesma marca)? Se NENHUM corresponder com confiança, use -1. Responda {"index": <número>}.`,
           },
         ],
         max_tokens: 60,

@@ -10,7 +10,7 @@ export type ActionKind = 'scraping' | 'conectar-instagram' | 'gerar-tom' | 'cust
 export type NodeData =
   | { type: 'start'; stepId?: string }
   | { type: 'message'; texto: string; stepId?: string }
-  | { type: 'question'; texto: string; opcoes: OpcaoItem[]; stepId?: string }
+  | { type: 'question'; texto: string; opcoes: OpcaoItem[]; salvarComo?: string; stepId?: string }
   | { type: 'action'; kind: ActionKind; label: string; stepId?: string }
   | { type: 'end'; texto: string; stepId?: string }
 
