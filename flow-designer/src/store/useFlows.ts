@@ -2,23 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { FlowDefinition, FlowId } from '../types'
 import { supabase } from '@/lib/supabase'
 
-function makeDefaultFlow(id: FlowId, nome: string, scrapingEnabled: boolean): FlowDefinition {
-  return {
-    id,
-    nome,
-    scrapingEnabled,
-    nodes: [
-      {
-        id: `${id}-start`,
-        type: 'start',
-        position: { x: 200, y: 60 },
-        data: { type: 'start' },
-      },
-    ],
-    edges: [],
-  }
-}
-
 const FLOW_A: FlowDefinition = {
   id: 'flow-a',
   nome: 'Fluxo A - Vi & Evandro',
@@ -333,10 +316,201 @@ const FLOW_B: FlowDefinition = {
   ],
 }
 
+const FLOW_C: FlowDefinition = {
+  id: 'flow-c',
+  nome: 'Fluxo C',
+  scrapingEnabled: false,
+  nodes: [
+    { id: 'fc-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
+    {
+      id: 'fc-msg-welcome',
+      type: 'message',
+      position: { x: 300, y: 200 },
+      data: {
+        type: 'message',
+        texto:
+          'Oi Bernard, bem-vindo ao Squad! 👋\n\nA partir de agora você conta com um time trabalhando 24/7 por você:\n\n📣Maky, seu marketing\n📱Waz, suas vendas e atendimento\n💰Fin, seu financeiro\n\nVou te guiar nesses primeiros passos e depois te apresentar ao seu time digital.\n\nPra isso, preciso de algumas informações sobre a sua empresa.',
+      },
+    },
+    {
+      id: 'fc-q-nome',
+      type: 'question',
+      position: { x: 300, y: 460 },
+      data: {
+        type: 'question',
+        texto: 'Vamos começar pelo básico: qual é o nome da sua empresa?',
+        opcoes: [{ id: 'fc-q-nome-r1', label: 'Nome da empresa' }],
+      },
+    },
+    {
+      id: 'fc-q-segmento',
+      type: 'question',
+      position: { x: 300, y: 660 },
+      data: {
+        type: 'question',
+        texto: 'E em qual segmento a empresa atua?',
+        opcoes: [{ id: 'fc-q-segmento-r1', label: 'Segmento' }],
+      },
+    },
+    {
+      id: 'fc-q-boas-vindas',
+      type: 'question',
+      position: { x: 300, y: 860 },
+      data: {
+        type: 'question',
+        texto: 'Você já tem uma mensagem de boas vindas?',
+        opcoes: [{ id: 'fc-q-boas-vindas-r1', label: 'Mensagem de boas vindas' }],
+      },
+    },
+    {
+      id: 'fc-q-catalogo',
+      type: 'question',
+      position: { x: 300, y: 1060 },
+      data: {
+        type: 'question',
+        texto:
+          'Você quer configurar como será enviado seu catálogo de produtos? Como você costuma enviar o catálogo para seus clientes?',
+        opcoes: [{ id: 'fc-q-catalogo-r1', label: 'Catálogo' }],
+      },
+    },
+    {
+      id: 'fc-q-horarios',
+      type: 'question',
+      position: { x: 300, y: 1260 },
+      data: {
+        type: 'question',
+        texto:
+          'Quais são os seus dias e horários de funcionamento? Pode ser detalhado: dias diferentes, horários diferentes, exceções.',
+        opcoes: [{ id: 'fc-q-horarios-r1', label: 'Horários' }],
+      },
+    },
+    {
+      id: 'fc-q-localizacao',
+      type: 'question',
+      position: { x: 300, y: 1460 },
+      data: {
+        type: 'question',
+        texto: 'Onde fica seu negócio? Bairro, cidade e onde faz entrega.',
+        opcoes: [{ id: 'fc-q-localizacao-r1', label: 'Localização' }],
+      },
+    },
+    {
+      id: 'fc-q-entrega',
+      type: 'question',
+      position: { x: 300, y: 1660 },
+      data: {
+        type: 'question',
+        texto: 'Vocês fazem entrega ou retirada?',
+        opcoes: [{ id: 'fc-q-entrega-r1', label: 'Entrega / retirada' }],
+      },
+    },
+    {
+      id: 'fc-q-prazo',
+      type: 'question',
+      position: { x: 300, y: 1860 },
+      data: {
+        type: 'question',
+        texto: 'Qual é o prazo mínimo para encomendas?',
+        opcoes: [{ id: 'fc-q-prazo-r1', label: 'Prazo mínimo' }],
+      },
+    },
+    {
+      id: 'fc-q-produto',
+      type: 'question',
+      position: { x: 300, y: 2060 },
+      data: {
+        type: 'question',
+        texto: 'Qual o produto mais vendido? Conte o nome, a faixa de preço e o diferencial.',
+        opcoes: [{ id: 'fc-q-produto-r1', label: 'Produto mais vendido' }],
+      },
+    },
+    {
+      id: 'fc-q-tom',
+      type: 'question',
+      position: { x: 300, y: 2260 },
+      data: {
+        type: 'question',
+        texto:
+          'Como a gente deve conversar com os clientes?\n\n1️⃣ Casual e descontraído — Conversa leve e amigável, como entre amigos. Linguagem simples e próxima do dia a dia.\n\n2️⃣ Afetuoso e acolhedor — Tom carinhoso e cuidadoso. Faz a cliente se sentir querida. Bom pra marcas com clima de casa.\n\n3️⃣ Elegante e sofisticado — Tom premium e refinado. Vocabulário cuidado, ideal pra marcas mais exclusivas.',
+        opcoes: [
+          { id: 'fc-q-tom-r1', label: 'Casual e descontraído' },
+          { id: 'fc-q-tom-r2', label: 'Afetuoso e acolhedor' },
+          { id: 'fc-q-tom-r3', label: 'Elegante e sofisticado' },
+        ],
+      },
+    },
+    {
+      id: 'fc-q-emojis',
+      type: 'question',
+      position: { x: 300, y: 2520 },
+      data: {
+        type: 'question',
+        texto: 'O agente deve usar emojis?',
+        opcoes: [
+          { id: 'fc-q-emojis-r1', label: 'Às vezes' },
+          { id: 'fc-q-emojis-r2', label: 'Sim' },
+          { id: 'fc-q-emojis-r3', label: 'Não' },
+        ],
+      },
+    },
+    {
+      id: 'fc-q-quais-emojis',
+      type: 'question',
+      position: { x: 620, y: 2700 },
+      data: {
+        type: 'question',
+        texto: 'Quais emojis você prefere usar?',
+        opcoes: [{ id: 'fc-q-quais-emojis-r1', label: 'Emojis preferidos' }],
+      },
+    },
+    {
+      id: 'fc-q-mais-info',
+      type: 'question',
+      position: { x: 300, y: 2900 },
+      data: {
+        type: 'question',
+        texto: 'Tem mais alguma coisa importante que o agente precisa saber?',
+        opcoes: [{ id: 'fc-q-mais-info-r1', label: 'Informações adicionais' }],
+      },
+    },
+    {
+      id: 'fc-end',
+      type: 'end',
+      position: { x: 300, y: 3120 },
+      data: {
+        type: 'end',
+        texto:
+          'Prontinho! Tenho tudo que preciso para configurar seu Waz. Em instantes ele estará pronto para atender seus clientes 24/7! 🎉',
+      },
+    },
+  ],
+  edges: [
+    { id: 'fc-e1', source: 'fc-start', target: 'fc-msg-welcome' },
+    { id: 'fc-e2', source: 'fc-msg-welcome', target: 'fc-q-nome' },
+    { id: 'fc-e3', source: 'fc-q-nome', target: 'fc-q-segmento', sourceHandle: 'fc-q-nome-r1' },
+    { id: 'fc-e4', source: 'fc-q-segmento', target: 'fc-q-boas-vindas', sourceHandle: 'fc-q-segmento-r1' },
+    { id: 'fc-e5', source: 'fc-q-boas-vindas', target: 'fc-q-catalogo', sourceHandle: 'fc-q-boas-vindas-r1' },
+    { id: 'fc-e6', source: 'fc-q-catalogo', target: 'fc-q-horarios', sourceHandle: 'fc-q-catalogo-r1' },
+    { id: 'fc-e7', source: 'fc-q-horarios', target: 'fc-q-localizacao', sourceHandle: 'fc-q-horarios-r1' },
+    { id: 'fc-e8', source: 'fc-q-localizacao', target: 'fc-q-entrega', sourceHandle: 'fc-q-localizacao-r1' },
+    { id: 'fc-e9', source: 'fc-q-entrega', target: 'fc-q-prazo', sourceHandle: 'fc-q-entrega-r1' },
+    { id: 'fc-e10', source: 'fc-q-prazo', target: 'fc-q-produto', sourceHandle: 'fc-q-prazo-r1' },
+    { id: 'fc-e11', source: 'fc-q-produto', target: 'fc-q-tom', sourceHandle: 'fc-q-produto-r1' },
+    { id: 'fc-e12', source: 'fc-q-tom', target: 'fc-q-emojis', sourceHandle: 'fc-q-tom-r1' },
+    { id: 'fc-e13', source: 'fc-q-tom', target: 'fc-q-emojis', sourceHandle: 'fc-q-tom-r2' },
+    { id: 'fc-e14', source: 'fc-q-tom', target: 'fc-q-emojis', sourceHandle: 'fc-q-tom-r3' },
+    { id: 'fc-e15', source: 'fc-q-emojis', target: 'fc-q-quais-emojis', sourceHandle: 'fc-q-emojis-r1' },
+    { id: 'fc-e16', source: 'fc-q-emojis', target: 'fc-q-quais-emojis', sourceHandle: 'fc-q-emojis-r2' },
+    { id: 'fc-e17', source: 'fc-q-emojis', target: 'fc-q-mais-info', sourceHandle: 'fc-q-emojis-r3' },
+    { id: 'fc-e18', source: 'fc-q-quais-emojis', target: 'fc-q-mais-info', sourceHandle: 'fc-q-quais-emojis-r1' },
+    { id: 'fc-e19', source: 'fc-q-mais-info', target: 'fc-end', sourceHandle: 'fc-q-mais-info-r1' },
+  ],
+}
+
 const DEFAULTS: Record<FlowId, FlowDefinition> = {
   'flow-a': FLOW_A,
   'flow-b': FLOW_B,
-  'flow-c': makeDefaultFlow('flow-c', 'Fluxo C - Bernard', false),
+  'flow-c': FLOW_C,
 }
 
 // ── localStorage fallback (used when Supabase is not configured) ─────────────
