@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { MessageCircle, Trash2 } from 'lucide-react'
 import type { FlowRFNode } from './shared'
+import { VarText } from './VarText'
 
 export default function MessageNode({ data }: NodeProps<FlowRFNode>) {
   const nodeData = data.flowNode.data
@@ -37,14 +38,11 @@ export default function MessageNode({ data }: NodeProps<FlowRFNode>) {
         </div>
 
         <div className="rounded-lg border-l-2 border-waz bg-waz/5 px-2.5 py-2">
-          <textarea
+          <VarText
             value={nodeData.texto}
-            onChange={(e) =>
-              data.onUpdate({ type: 'message', texto: e.target.value })
-            }
+            onChange={(v) => data.onUpdate({ type: 'message', texto: v })}
             rows={3}
             placeholder="Waz diz…"
-            className="nodrag nowheel w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
       </div>
