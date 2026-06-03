@@ -21,7 +21,7 @@ function makeDefaultFlow(id: FlowId, nome: string, scrapingEnabled: boolean): Fl
 
 const FLOW_A: FlowDefinition = {
   id: 'flow-a',
-  nome: 'Fluxo A',
+  nome: 'Fluxo A - Vi & Evandro',
   scrapingEnabled: true,
   nodes: [
     { id: 'fa-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
@@ -170,7 +170,7 @@ const FLOW_A: FlowDefinition = {
 
 const FLOW_B: FlowDefinition = {
   id: 'flow-b',
-  nome: 'Fluxo B',
+  nome: 'Fluxo B - Ana & Luiz',
   scrapingEnabled: false,
   nodes: [
     { id: 'fb-start', type: 'start', position: { x: 300, y: 60 }, data: { type: 'start' } },
@@ -336,7 +336,7 @@ const FLOW_B: FlowDefinition = {
 const DEFAULTS: Record<FlowId, FlowDefinition> = {
   'flow-a': FLOW_A,
   'flow-b': FLOW_B,
-  'flow-c': makeDefaultFlow('flow-c', 'Fluxo C', false),
+  'flow-c': makeDefaultFlow('flow-c', 'Fluxo C - Bernard', false),
 }
 
 // ── localStorage fallback (used when Supabase is not configured) ─────────────
