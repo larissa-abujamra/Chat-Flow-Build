@@ -13,8 +13,13 @@ const STEP_TEXT_KEY: Record<string, { message?: string; question?: string }> = {
   ifood: { question: 'ifood.encontrei' },
   catalog: { question: 'catalog.found' },
   carro_chefe: { question: 'carro_chefe.msg' },
+  fulfillment: { question: 'fulfillment.msg' },
+  payment: { question: 'payment.msg' },
   tone_generated: { question: 'tone_generated.found' },
   emojis: { question: 'emojis.msg' },
+  escalation: { question: 'escalation.msg' },
+  tasks: { question: 'tasks.msg' },
+  review: { message: 'review.msg' },
   configured: { message: 'configured.l1' },
 }
 

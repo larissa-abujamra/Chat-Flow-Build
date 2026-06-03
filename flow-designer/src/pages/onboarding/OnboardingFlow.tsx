@@ -32,6 +32,25 @@ const PLACEHOLDER_CATALOG: Record<BizType, { name: string; price: string | null 
   servicos: [],
 };
 
+// Deriva o tipo de negócio a partir da atividade/CNAE da Receita (texto livre).
+// Só muda quando há sinal claro; senão mantém o atual (nunca chuta). Isso faz o
+// fluxo se adaptar sozinho: serviços pulam o iFood e pedem "serviços" em vez de
+// "produtos"; varejo usa o catálogo de e-commerce.
+function deriveBizType(atividade: string, current: BizType): BizType {
+  const t = (atividade || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  if (!t) return current;
+  if (/restaurant|lanchonet|padaria|confeitar|aliment|pizzar|hamburg|food|l1bar\b|\bbar\b|bebida|sorvet|acai|doceria|cafeteria|marmit|buffet|cozinha|gastronom|delicatessen|salgad/.test(t))
+    return "alimentacao";
+  if (/salao|cabeleire|estetic|barbear|clinic|consultor|advocac|contabil|servico|oficina|manuten|academia|estudio|fotograf|\bdesign\b|software|agencia|escola|curso|ensino|saude|odontolog|veterinar|transporte|limpeza|reparo/.test(t))
+    return "servicos";
+  if (/comercio|loja|varejo|vestuar|roupa|calcad|acessori|papelar|farmac|petshop|eletronic|movei|joalher|livraria|cosmetic|perfumar|presente|moda/.test(t))
+    return "varejo";
+  return current;
+}
+
 interface PlaceCandidate {
   id: string;
   nome: string;
@@ -100,17 +119,20 @@ type NodeId =
   | "catalog" | "catalog_falta" | "carro_chefe"
   | "ifood" | "ifood_connecting" | "ifood_link" | "ifood_ask_link"
   | "instagram" | "instagram_edit" | "instagram_connecting"
+  | "fulfillment" | "fulfillment_details" | "payment"
   | "tone_generated" | "tone_manual" | "tone_upload" | "tone_reading"
-  | "emojis" | "configured";
+  | "emojis" | "escalation" | "tasks" | "review" | "configured";
 
-type TextField = "businessName" | "city" | "cnpj" | "site" | "instagram" | "setor" | "services";
+type TextField =
+  | "businessName" | "city" | "cnpj" | "site" | "instagram" | "setor" | "services"
+  | "fulfillmentDetails" | "payment" | "escalation";
 
 interface Msg {
   id: number;
   sender: "oddy" | "user";
   kind: "text" | "extra";
   text?: string;
-  extra?: "catalog" | "connecting" | "toneExample" | "searching" | "contact" | "readingChat" | "scraping" | "ifoodConnecting" | "ifoodSearching" | "ifoodFound";
+  extra?: "catalog" | "connecting" | "toneExample" | "searching" | "contact" | "readingChat" | "scraping" | "ifoodConnecting" | "ifoodSearching" | "ifoodFound" | "review";
   // blocos de status (busca/leitura/conexão) começam girando e viram um
   // checkmark verde quando a operação correspondente termina.
   done?: boolean;
@@ -122,6 +144,12 @@ interface Choice {
   next: string;
   set?: () => void;
 }
+// Opção de seleção múltipla (usada em "tasks": o que o time deve começar a fazer).
+interface MultiOption {
+  value: string;
+  label: string;
+  desc?: string;
+}
 type Pending =
   | { kind: "choice"; options: Choice[] }
   | { kind: "carroChefe" }
@@ -129,6 +157,7 @@ type Pending =
   | { kind: "placePick" }
   | { kind: "toneManual" }
   | { kind: "toneUpload" }
+  | { kind: "multiChoice"; field: "tasks"; options: MultiOption[]; cta: string }
   | { kind: "textInput"; field: string; placeholder: string }
   | { kind: "finish" };
 
@@ -361,6 +390,30 @@ const FLOW_NODES: FlowNodeDef[] = [
     ],
   },
   {
+    id: "fulfillment",
+    title: "Entrega & retirada",
+    kind: "Pergunta",
+    fields: [
+      { key: "fulfillment.msg", label: "Pergunta (modo)", default: "Como seus clientes recebem os pedidos?" },
+      { key: "fulfillment.opt_entrega", label: "Opção: entrega", default: "Entrega" },
+      { key: "fulfillment.opt_retirada", label: "Opção: retirada", default: "Retirada" },
+      { key: "fulfillment.opt_ambos", label: "Opção: os dois", default: "Entrega e retirada" },
+      { key: "fulfillment.details_msg", label: "Pergunta (regras)", default: "Me conta as regras de entrega: bairros ou raio que atende, taxa de entrega, pedido mínimo e prazo de preparo/antecedência. Pode ser em uma frase.", multiline: true },
+      { key: "fulfillment.details_ph", label: "Placeholder (regras)", default: "Ex.: entrego em Pinheiros e Vila Madalena, taxa R$ 8, mínimo R$ 30, preparo 40 min" },
+      { key: "fulfillment.details_msg_retirada", label: "Pergunta (retirada)", default: "Beleza! Tem alguma regra pra retirada? (horário, prazo de preparo, antecedência)", multiline: true },
+      { key: "fulfillment.details_ph_retirada", label: "Placeholder (retirada)", default: "Ex.: retirar em até 1h, encomendas com 1 dia de antecedência" },
+    ],
+  },
+  {
+    id: "payment",
+    title: "Pagamento",
+    kind: "Pergunta",
+    fields: [
+      { key: "payment.msg", label: "Pergunta", default: "Quais formas de pagamento você aceita? Se aceitar Pix, me passa a chave — assim eu já envio na hora de cobrar.", multiline: true },
+      { key: "payment.ph", label: "Placeholder", default: "Ex.: Pix (chave 11 99999-9999), cartão e dinheiro. Encomenda com 50% de sinal." },
+    ],
+  },
+  {
     id: "tone_generated",
     title: "Tom de voz",
     kind: "Pergunta",
@@ -405,11 +458,47 @@ const FLOW_NODES: FlowNodeDef[] = [
     ],
   },
   {
+    id: "escalation",
+    title: "Quando chamar um humano",
+    kind: "Pergunta",
+    fields: [
+      { key: "escalation.msg", label: "Pergunta", default: "Quando eu não souber resolver algo ou o cliente pedir, pra qual WhatsApp eu chamo uma pessoa do time?", multiline: true },
+      { key: "escalation.ph", label: "Placeholder", default: "Ex.: (11) 99999-9999 — falar com a Júlia" },
+      { key: "escalation.opt_skip", label: "Opção: pular", default: "Pode resolver tudo sozinho por enquanto" },
+    ],
+  },
+  {
+    id: "tasks",
+    title: "O que eu começo a fazer",
+    kind: "Pergunta",
+    fields: [
+      { key: "tasks.msg", label: "Pergunta", default: "Por último: o que você quer que eu já comece a fazer? Pode marcar quantos quiser.", multiline: true },
+      { key: "tasks.cta", label: "Botão confirmar", default: "É isso, pode começar" },
+      { key: "tasks.opt_atender", label: "Opção: atender", default: "Responder clientes no WhatsApp" },
+      { key: "tasks.opt_pedidos", label: "Opção: pedidos", default: "Anotar e confirmar pedidos" },
+      { key: "tasks.opt_cardapio", label: "Opção: cardápio", default: "Enviar cardápio e preços" },
+      { key: "tasks.opt_followup", label: "Opção: follow-up", default: "Recuperar clientes sumidos" },
+      { key: "tasks.opt_agenda", label: "Opção: agenda", default: "Agendar e lembrar horários" },
+      { key: "tasks.opt_financeiro", label: "Opção: financeiro", default: "Resumo financeiro do dia" },
+    ],
+  },
+  {
+    id: "review",
+    title: "Revisão final",
+    kind: "Mensagem",
+    fields: [
+      { key: "review.msg", label: "Mensagem", default: "Fechou! Aqui está o resumo do que eu já sei sobre o {negocio}:" },
+      { key: "review.ask", label: "Confirmação", default: "Tá tudo certo pra eu começar?" },
+      { key: "review.opt_sim", label: "Opção: confirmar", default: "Tá tudo certo" },
+      { key: "review.opt_ajustar", label: "Opção: ajustar depois", default: "Ajusto depois no painel" },
+    ],
+  },
+  {
     id: "configured",
     title: "Configurado",
     kind: "Mensagem",
     fields: [
-      { key: "configured.l1", label: "Mensagem 1", default: "Prontinho! Já sei quem você é e como falar." },
+      { key: "configured.l1", label: "Mensagem 1", default: "Prontinho! Já sei quem você é, como falar e o que fazer." },
       { key: "configured.l2", label: "Mensagem 2", default: "Bora ver o que eu sei fazer?" },
       { key: "configured.cta", label: "Botão", default: "Ver funcionalidades" },
     ],
@@ -1230,6 +1319,13 @@ export function OnboardingPreview({
   const [carroChefe, setCarroChefe] = useState("");
   const [tone, setTone] = useState("");
   const [emoji, setEmoji] = useState("");
+  // Camada OPERACIONAL — o que o time de IA precisa pra realmente atender e cobrar.
+  const [fulfillmentMode, setFulfillmentMode] = useState(""); // Entrega / Retirada / Entrega e retirada
+  const [fulfillment, setFulfillment] = useState("");         // regras (bairros, taxa, mínimo, prazo)
+  const [payment, setPayment] = useState("");                 // formas + chave Pix + sinal
+  const [escalation, setEscalation] = useState("");           // WhatsApp humano p/ fallback
+  const [tasks, setTasks] = useState<string[]>([]);           // o que automatizar primeiro
+  const [taskSel, setTaskSel] = useState<string[]>([]);       // seleção em andamento (multiChoice)
   const [research, setResearch] = useState<Research | null>(null);
   const [site, setSite] = useState("");
   const [igHandle, setIgHandle] = useState("");
@@ -1281,8 +1377,23 @@ export function OnboardingPreview({
   setorRef.current = setor;
   const cityRef = useRef(city);
   cityRef.current = city;
-  const bizTypeRef = useRef(bizType);
-  bizTypeRef.current = bizType;
+  const fulfillmentModeRef = useRef(fulfillmentMode);
+  fulfillmentModeRef.current = fulfillmentMode;
+  // bizType efetivo: começa pela prop e, na experiência real (não no editor),
+  // é refinado pelo CNAE da Receita (ex.: salão → serviços, loja → varejo) —
+  // assim o fluxo pula o iFood pra serviços e pede o catálogo certo. No editor
+  // (embedded), o seletor manual manda.
+  const [bizTypeState, setBizTypeState] = useState<BizType>(bizType);
+  useEffect(() => { setBizTypeState(bizType); }, [bizType]);
+  const bizTypeRef = useRef(bizTypeState);
+  bizTypeRef.current = bizTypeState;
+  // Na experiência real, refina o bizType pelo CNAE da Receita assim que chega.
+  useEffect(() => {
+    if (embedded) return; // no editor, o seletor manual é a fonte da verdade
+    const atividade = cnpjData?.atividade || setor || "";
+    if (!atividade) return;
+    setBizTypeState((cur) => deriveBizType(atividade, cur));
+  }, [cnpjData, setor, embedded]);
   const researchPromiseRef = useRef<Promise<Research | null> | null>(null);
   // normalização do que o usuário digitou (nome/cidade): capitalização, acentos
   // e abreviações de cidade (sp/sampa → São Paulo). Só arruma o texto; não inventa.
@@ -1999,8 +2110,16 @@ export function OnboardingPreview({
             if (!cancelled) advanceFrom("place_pick");
             break;
           }
+          // COLAPSO: um único candidato confiante → seleciona sozinho (menos
+          // toques). Com vários, mostra a lista pra escolher.
+          if (found.length === 1) {
+            await say(tx("place_pick.found"));
+            await wait(300);
+            if (!cancelled) handlePlacePick(found[0]);
+            break;
+          }
           await say(tx("place_pick.found"));
-          if (found.length > 1) await say(tx("place_pick.multi"));
+          await say(tx("place_pick.multi"));
           if (!cancelled) setPending({ kind: "placePick" });
           break;
         }
@@ -2073,6 +2192,10 @@ export function OnboardingPreview({
                   },
                 ],
               });
+          } else if (bizTypeRef.current === "alimentacao") {
+            // COLAPSO: restaurante sem site deduzido → não pede URL (o catálogo
+            // vem do iFood). Evita uma pergunta inútil; segue direto.
+            advanceFrom("confirm_site");
           } else {
             await say(tx("confirm_site.ask"));
             if (!cancelled)
@@ -2146,6 +2269,40 @@ export function OnboardingPreview({
           if (!cancelled)
             setPending({ kind: bizTypeRef.current === "servicos" ? "destaque" : "carroChefe" });
           break;
+        case "fulfillment": {
+          // OPERACIONAL: como o cliente recebe. Sem isso o Waz não fecha pedido.
+          await say(tx("fulfillment.msg"));
+          if (!cancelled)
+            setPending({
+              kind: "choice",
+              options: [
+                { label: tx("fulfillment.opt_entrega"), value: "entrega", next: "fulfillment_details", set: () => setFulfillmentMode("Entrega") },
+                { label: tx("fulfillment.opt_retirada"), value: "retirada", next: "fulfillment_details", set: () => setFulfillmentMode("Retirada") },
+                { label: tx("fulfillment.opt_ambos"), value: "ambos", next: "fulfillment_details", set: () => setFulfillmentMode("Entrega e retirada") },
+              ],
+            });
+          break;
+        }
+        case "fulfillment_details": {
+          // pede as regras (varia se for só retirada). Transiente → volta pra
+          // ordem real via advanceFrom("fulfillment") no submitText.
+          const retiradaOnly = fulfillmentModeRef.current === "Retirada";
+          await say(retiradaOnly ? tx("fulfillment.details_msg_retirada") : tx("fulfillment.details_msg"));
+          if (!cancelled)
+            setPending({
+              kind: "textInput",
+              field: "fulfillmentDetails",
+              placeholder: retiradaOnly ? tx("fulfillment.details_ph_retirada") : tx("fulfillment.details_ph"),
+            });
+          break;
+        }
+        case "payment": {
+          // OPERACIONAL: formas de pagamento + chave Pix. Sem isso Fin/Waz não cobram.
+          await say(tx("payment.msg"));
+          if (!cancelled)
+            setPending({ kind: "textInput", field: "payment", placeholder: tx("payment.ph") });
+          break;
+        }
         case "instagram": {
           // Aguarda a varredura do site (pode trazer o @ do Instagram).
           if (siteScrapePromiseRef.current && !siteScrapeRef.current) {
@@ -2373,6 +2530,49 @@ export function OnboardingPreview({
               ],
             });
           break;
+        case "escalation": {
+          // OPERACIONAL: pra quem o agente passa quando não resolve (autonomia segura).
+          await say(tx("escalation.msg"));
+          if (!cancelled)
+            setPending({ kind: "textInput", field: "escalation", placeholder: tx("escalation.ph") });
+          break;
+        }
+        case "tasks": {
+          // ATIVAÇÃO: o que o time deve começar a fazer. Sem isso o onboarding
+          // termina sem dar trabalho aos agentes.
+          await say(tx("tasks.msg"));
+          if (!cancelled)
+            setPending({
+              kind: "multiChoice",
+              field: "tasks",
+              cta: tx("tasks.cta"),
+              options: [
+                { value: "atender", label: tx("tasks.opt_atender") },
+                { value: "pedidos", label: tx("tasks.opt_pedidos") },
+                { value: "cardapio", label: tx("tasks.opt_cardapio") },
+                { value: "followup", label: tx("tasks.opt_followup") },
+                { value: "agenda", label: tx("tasks.opt_agenda") },
+                { value: "financeiro", label: tx("tasks.opt_financeiro") },
+              ],
+            });
+          break;
+        }
+        case "review": {
+          // Resumo final de tudo que foi captado — confiança + verificação antes
+          // de "configurado". O ReviewBlock lê o estado atual no render.
+          await say(tx("review.msg", { negocio: businessNameRef.current.trim() || "seu negócio" }));
+          await extra("review");
+          await say(tx("review.ask"));
+          if (!cancelled)
+            setPending({
+              kind: "choice",
+              options: [
+                { label: tx("review.opt_sim"), value: "sim", next: "__advance__" },
+                { label: tx("review.opt_ajustar"), value: "ajustar", next: "__advance__" },
+              ],
+            });
+          break;
+        }
         case "configured":
           await say(tx("configured.l1"));
           await say(tx("configured.l2"));
@@ -2416,6 +2616,12 @@ export function OnboardingPreview({
       ifood: ifoodFound ? { nome: ifoodFound.nome, url: ifoodFound.url, id: ifoodFound.id || null } : null,
       tom: tone,
       emoji,
+      tipoNegocio: bizTypeState,
+      // camada operacional — o que o time precisa pra atender/cobrar/operar
+      entrega: { modo: fulfillmentMode, regras: fulfillment },
+      pagamento: payment,
+      escalacao: escalation,
+      tarefas: tasks,
       atualizadoEm: new Date().toISOString(),
     };
     try {
@@ -2423,7 +2629,7 @@ export function OnboardingPreview({
     } catch {
       /* ambiente sem localStorage — ignora */
     }
-  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, tone, emoji]);
+  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, tone, emoji, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
 
   /* handlers */
   const handleChoice = (opt: Choice) => {
@@ -2643,6 +2849,16 @@ export function OnboardingPreview({
       setIfoodFound(loja);
       setNode("ifood_connecting");
       return;
+    } else if (field === "fulfillmentDetails") {
+      // nó transiente → volta pra etapa real "fulfillment" pra seguir a ordem.
+      setFulfillment(v);
+      advanceFrom("fulfillment");
+      return;
+    } else if (field === "payment") {
+      setPayment(v);
+    } else if (field === "escalation") {
+      // "pode resolver sozinho"/negativas → sem contato (não trava o fluxo).
+      setEscalation(cleanField(v));
     } else if (field === "services") {
       const list = v.split(/[,\n;]+/).map((s) => s.trim()).filter(Boolean);
       setServices(list.length ? list : [v]);
@@ -2653,6 +2869,17 @@ export function OnboardingPreview({
   const goTour = () => {
     setPending(null);
     advanceFrom(node);
+  };
+
+  // tasks (multiChoice): alterna seleção e confirma o conjunto.
+  const toggleTask = (value: string) =>
+    setTaskSel((s) => (s.includes(value) ? s.filter((x) => x !== value) : [...s, value]));
+  const submitTasks = () => {
+    if (!pending || pending.kind !== "multiChoice") return;
+    const labels = pending.options.filter((o) => taskSel.includes(o.value)).map((o) => o.label);
+    setTasks(taskSel);
+    addUser(labels.length ? labels.join(" · ") : "Decidir depois");
+    advanceFrom("tasks");
   };
 
   const resetChatState = () => {
@@ -2671,6 +2898,9 @@ export function OnboardingPreview({
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
     setCarroChefe(""); setTone(""); setEmoji("");
+    setFulfillmentMode(""); fulfillmentModeRef.current = "";
+    setFulfillment(""); setPayment(""); setEscalation("");
+    setTasks([]); setTaskSel([]);
     setResearch(null);
     researchPromiseRef.current = null;
     normalizePromiseRef.current = null;
@@ -2769,7 +2999,7 @@ export function OnboardingPreview({
           items={
             catalogItems.length
               ? catalogItems.map((p) => ({ name: p.nome, price: p.preco || null }))
-              : PLACEHOLDER_CATALOG[bizType]
+              : PLACEHOLDER_CATALOG[bizTypeState]
           }
         />
       );
@@ -2788,6 +3018,38 @@ export function OnboardingPreview({
     if (e === "readingChat") return <ReadingChatBlock done={done} />;
     if (e === "toneExample")
       return <ToneExampleBlock tomLabel={research?.tom?.trim() || undefined} exemplo={research?.exemplo?.trim() || undefined} />;
+    if (e === "review") {
+      const rows: { label: string; value: string }[] = [
+        { label: "Negócio", value: businessName },
+        { label: "CNPJ", value: cnpjData?.cnpj || "" },
+        { label: "Endereço", value: placeAddr || cnpjData?.endereco || "" },
+        { label: "Telefone", value: placeTelefone || cnpjData?.telefone || "" },
+        { label: "Horário", value: placeHorario || cnpjData?.horario || "" },
+        { label: "Site", value: site },
+        { label: "Instagram", value: igData?.username ? `@${igData.username}` : (igHandle || "") },
+        { label: "iFood", value: ifoodFound?.nome || "" },
+        { label: "Catálogo", value: catalogItems.length ? `${catalogItems.length} itens` : (services.length ? `${services.length} serviços` : "") },
+        { label: "Carro-chefe", value: carroChefe },
+        { label: "Entrega", value: [fulfillmentMode, fulfillment].filter(Boolean).join(" — ") },
+        { label: "Pagamento", value: payment },
+        { label: "Tom de voz", value: [tone, emoji && `emojis: ${emoji}`].filter(Boolean).join(" · ") },
+        { label: "Falar com humano", value: escalation },
+        { label: "Vou começar", value: tasks.length ? `${tasks.length} tarefa${tasks.length > 1 ? "s" : ""}` : "" },
+      ].filter((r) => r.value && r.value.trim());
+      return (
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-full max-w-md">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumo do onboarding</p>
+          <ul className="divide-y divide-gray-100">
+            {rows.map((r) => (
+              <li key={r.label} className="flex gap-3 py-1.5 text-[13px]">
+                <span className="text-gray-400 w-28 shrink-0">{r.label}</span>
+                <span className="text-[#13161D] flex-1 break-words">{r.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
     return null;
   };
 
@@ -2909,7 +3171,7 @@ export function OnboardingPreview({
               <div className="flex flex-wrap gap-2 justify-end pt-1 chat-enter">
                 {(catalogItems.length
                   ? catalogItems.map((p) => p.nome)
-                  : PLACEHOLDER_CATALOG[bizType].map((c) => c.name)
+                  : PLACEHOLDER_CATALOG[bizTypeState].map((c) => c.name)
                 ).map((nome) => (
                   <PillButton key={nome} variant="outline" onClick={() => pickCarroChefe(nome)} className="h-11 px-5">
                     {nome}
@@ -2925,6 +3187,33 @@ export function OnboardingPreview({
                     {s}
                   </PillButton>
                 ))}
+              </div>
+            )}
+
+            {pending?.kind === "multiChoice" && (
+              <div className="flex flex-col gap-2 pt-1 chat-enter w-full items-end">
+                <div className="flex flex-wrap gap-2 justify-end">
+                  {pending.options.map((o) => {
+                    const on = taskSel.includes(o.value);
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => toggleTask(o.value)}
+                        className={`h-11 px-4 rounded-full border text-[14px] font-medium transition-colors ${
+                          on
+                            ? "bg-[#13161D] text-white border-[#13161D]"
+                            : "bg-white text-[#13161D] border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        {on ? "✓ " : ""}{o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <PillButton onClick={submitTasks} className="h-11 px-6">
+                  {pending.cta} <ArrowRight className="w-4 h-4" />
+                </PillButton>
               </div>
             )}
 
