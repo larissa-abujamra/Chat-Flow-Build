@@ -193,6 +193,9 @@ export default function ChatPreview({
   const [isTyping, setIsTyping] = useState(false)
   const [started, setStarted] = useState(false)
   const [inputText, setInputText] = useState('')
+  // Values the user typed, keyed by each question's `salvarComo`. Used to fill
+  // {placeholders} in later messages so the preview reads like the real chat.
+  const [vars, setVars] = useState<Record<string, string>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const processingRef = useRef(false)
@@ -201,6 +204,13 @@ export default function ChatPreview({
   const notifyActive = useCallback(
     (nodeId: string | null) => onActiveNodeChange?.(nodeId),
     [onActiveNodeChange]
+  )
+
+  // Replace {var} tokens with the values the user typed; unknown tokens stay
+  // literal (e.g. {site} before a site step). Applied at render time.
+  const subst = useCallback(
+    (t: string) => t.replace(/\{(\w+)\}/g, (_m, k) => vars[k] ?? `{${k}}`),
+    [vars]
   )
 
   const waitingForInput = state.pendingItems.length === 0 && state.pendingWaitingForInput
@@ -280,46 +290,58 @@ export default function ChatPreview({
       if (!trimmed || !state.currentNodeId) return
       setInputText('')
 
-      setState((prev) => {
-        const node = flow.nodes.find((n) => n.id === prev.currentNodeId)
-        if (!node || node.data.type !== 'question') return prev
+      const node = flow.nodes.find((n) => n.id === state.currentNodeId)
+      if (!node || node.data.type !== 'question') return
 
-        const matched = matchOpcao(trimmed, node.data.opcoes)
-        const userMsg: ChatItem = { kind: 'user', text: trimmed, nodeId: node.id }
+      // Capture this answer under the question's variable so later {placeholders}
+      // can be filled with what the user actually typed.
+      if (node.data.salvarComo) {
+        const key = node.data.salvarComo
+        setVars((v) => ({ ...v, [key]: trimmed }))
+      }
 
-        if (!matched) {
-          return {
-            ...prev,
-            visibleItems: [...prev.visibleItems, userMsg],
-            pendingItems: [{ kind: 'bot', text: '(Pergunta sem respostas configuradas.)', nodeId: node.id }],
-            pendingWaitingForInput: false,
-            pendingDone: false,
-          }
-        }
+      // The input bar only renders when the preview is idle (no pending items),
+      // so `state` is the committed, stable snapshot here. Compute the next
+      // state from it and notify the parent AFTER committing — calling
+      // notifyActive() inside the setState updater would update FlowEditor while
+      // ChatPreview renders (React "setState in render" warning).
+      const matched = matchOpcao(trimmed, node.data.opcoes)
+      const userMsg: ChatItem = { kind: 'user', text: trimmed, nodeId: node.id }
 
-        const edge = flow.edges.find((e) => e.source === node.id && e.sourceHandle === matched.id)
-        if (!edge) {
-          return {
-            ...prev,
-            visibleItems: [...prev.visibleItems, userMsg],
-            pendingItems: [{ kind: 'bot', text: '(Resposta sem destino configurado.)', nodeId: node.id }],
-            pendingWaitingForInput: false,
-            pendingDone: false,
-          }
-        }
+      if (!matched) {
+        setState({
+          ...state,
+          visibleItems: [...state.visibleItems, userMsg],
+          pendingItems: [{ kind: 'bot', text: '(Pergunta sem respostas configuradas.)', nodeId: node.id }],
+          pendingWaitingForInput: false,
+          pendingDone: false,
+        })
+        return
+      }
 
-        const result = walkForward(flow, edge.target, [...prev.visibleItems, userMsg])
-        notifyActive(result.currentNodeId)
-        return {
-          visibleItems: [...prev.visibleItems, userMsg],
-          pendingItems: result.items.slice(prev.visibleItems.length + 1),
-          currentNodeId: result.currentNodeId,
-          pendingWaitingForInput: result.waitingForInput,
-          pendingDone: result.done,
-        }
+      const edge = flow.edges.find((e) => e.source === node.id && e.sourceHandle === matched.id)
+      if (!edge) {
+        setState({
+          ...state,
+          visibleItems: [...state.visibleItems, userMsg],
+          pendingItems: [{ kind: 'bot', text: '(Resposta sem destino configurado.)', nodeId: node.id }],
+          pendingWaitingForInput: false,
+          pendingDone: false,
+        })
+        return
+      }
+
+      const result = walkForward(flow, edge.target, [...state.visibleItems, userMsg])
+      setState({
+        visibleItems: [...state.visibleItems, userMsg],
+        pendingItems: result.items.slice(state.visibleItems.length + 1),
+        currentNodeId: result.currentNodeId,
+        pendingWaitingForInput: result.waitingForInput,
+        pendingDone: result.done,
       })
+      notifyActive(result.currentNodeId)
     },
-    [flow, state.currentNodeId, notifyActive]
+    [flow, state, notifyActive]
   )
 
   const restart = useCallback(() => {
@@ -328,6 +350,7 @@ export default function ChatPreview({
     setIsTyping(false)
     setStarted(false)
     setInputText('')
+    setVars({})
     setState(EMPTY)
     notifyActive(null)
   }, [notifyActive])
@@ -347,7 +370,7 @@ export default function ChatPreview({
       return (
         <div key={i} className="flex items-end gap-2">
           <div className={`max-w-[84%] px-3.5 py-2.5 rounded-2xl rounded-tl-sm text-sm bg-card border border-border text-foreground shadow-sm whitespace-pre-wrap ${item.text ? '' : 'italic text-muted-foreground'}`}>
-            {item.text || '(mensagem vazia)'}
+            {item.text ? subst(item.text) : '(mensagem vazia)'}
           </div>
         </div>
       )

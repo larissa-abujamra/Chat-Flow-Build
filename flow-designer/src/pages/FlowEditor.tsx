@@ -121,9 +121,10 @@ export default function FlowEditor({ flowId }: { flowId: FlowId }) {
           />
         </div>
 
-        {/* Right preview. Fluxo Stefano runs the real Squad onboarding wizard;
-            every other flow uses the scripted node-walker chat preview. */}
-        {flowId === 'flow-stefano' ? (
+        {/* Right preview. Fluxo Stefano and Flow Final run the real Squad
+            onboarding wizard (same polished UI/buttons); every other flow uses
+            the scripted node-walker chat preview. */}
+        {flowId === 'flow-stefano' || flowId === 'flow-final' ? (
           <div
             className="flex flex-col h-full bg-card border-l border-border shrink-0"
             style={{ width: 460 }}

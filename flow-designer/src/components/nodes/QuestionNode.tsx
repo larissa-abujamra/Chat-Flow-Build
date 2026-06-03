@@ -10,24 +10,21 @@ export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
   const addOpcao = () => {
     const newOpcao: OpcaoItem = { id: crypto.randomUUID(), label: 'Nova opção' }
     data.onUpdate({
-      type: 'question',
-      texto: nodeData.texto,
+      ...nodeData,
       opcoes: [...nodeData.opcoes, newOpcao],
     })
   }
 
   const updateOpcaoLabel = (id: string, label: string) => {
     data.onUpdate({
-      type: 'question',
-      texto: nodeData.texto,
+      ...nodeData,
       opcoes: nodeData.opcoes.map((o) => (o.id === id ? { ...o, label } : o)),
     })
   }
 
   const removeOpcao = (id: string) => {
     data.onUpdate({
-      type: 'question',
-      texto: nodeData.texto,
+      ...nodeData,
       opcoes: nodeData.opcoes.filter((o) => o.id !== id),
     })
   }
@@ -71,9 +68,8 @@ export default function QuestionNode({ data }: NodeProps<FlowRFNode>) {
             value={nodeData.texto}
             onChange={(e) =>
               data.onUpdate({
-                type: 'question',
+                ...nodeData,
                 texto: e.target.value,
-                opcoes: nodeData.opcoes,
               })
             }
             rows={2}
