@@ -1269,6 +1269,7 @@ export function OnboardingPreview({
   const ifoodFoundRef = useRef<IFoodStore | null>(null);
   const ifoodCatalogRef = useRef<CatalogItem[] | null>(null);
   const [textDraft, setTextDraft] = useState("");
+  const [askDraft, setAskDraft] = useState(""); // "pergunte qualquer coisa" nos passos de botões
   const [toneDraft, setToneDraft] = useState("");
   const [toneFileBusy, setToneFileBusy] = useState(false);
   const [toneErr, setToneErr] = useState("");
@@ -1430,6 +1431,16 @@ export function OnboardingPreview({
       await new Promise((r) => setTimeout(r, 450));
       addOddy(lastQuestion);
     }
+  };
+
+  // "Pergunte qualquer coisa" nos passos de BOTÕES (choice/carroChefe/destaque/
+  // placePick/finish): o usuário digita uma dúvida na caixinha; respondemos e os
+  // botões continuam ali (não mexemos no `pending`), então ele escolhe depois.
+  const submitAsk = async () => {
+    const q = askDraft.trim();
+    if (!q) return;
+    setAskDraft("");
+    await answerSideQuestion(q);
   };
 
   const fetchPlaces = async (
@@ -3077,6 +3088,32 @@ export function OnboardingPreview({
               <div className="flex justify-end pt-1 chat-enter">
                 <PillButton variant="accent" onClick={goTour} className="h-12 px-6 text-base">
                   {tx("configured.cta")} <ArrowRight className="w-4 h-4" />
+                </PillButton>
+              </div>
+            )}
+
+            {/* "Pergunte qualquer coisa" também nos passos de BOTÕES: caixinha
+                discreta abaixo das opções; responder NÃO escolhe nada, os botões
+                acima continuam disponíveis. */}
+            {(pending?.kind === "choice" ||
+              pending?.kind === "carroChefe" ||
+              pending?.kind === "destaque" ||
+              pending?.kind === "placePick") && (
+              <div className="flex items-center gap-2 pt-1 opacity-90">
+                <input
+                  value={askDraft}
+                  onChange={(e) => setAskDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitAsk()}
+                  placeholder="Quer perguntar algo antes? Escreva aqui…"
+                  className="flex-1 h-10 px-4 bg-white border border-gray-200 rounded-full focus:outline-none focus:border-[#13161D] text-[14px]"
+                />
+                <PillButton
+                  variant="outline"
+                  onClick={submitAsk}
+                  disabled={!askDraft.trim()}
+                  className="h-10 w-10 !px-0 shrink-0"
+                >
+                  <Send className="w-4 h-4" />
                 </PillButton>
               </div>
             )}
