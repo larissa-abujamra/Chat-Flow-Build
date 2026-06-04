@@ -363,7 +363,7 @@ const FLOW_NODES: FlowNodeDef[] = [
       { key: "instagram.l2", label: "Convite", default: "Quer conectar seu Instagram pra eu aprender seu jeito de falar? Uso suas DMs e legendas só pra captar o tom.", multiline: true },
       { key: "instagram.l2_found", label: "Instagram encontrado", default: "Achei seu Instagram: @{handle}. Quer que eu conecte? Uso suas legendas e DMs pra aprender seu tom e puxar mais do seu catálogo.", multiline: true },
       { key: "instagram.scanning", label: "Varrendo o site", default: "Deixa eu dar uma olhada no site de vocês pra já adiantar algumas coisas... 🔎" },
-      { key: "instagram.found_on_site", label: "Instagram achado no site", default: "Achei o Instagram de vocês no site: {handle} 📸 Já vou conectar pra você." },
+      { key: "instagram.found_on_site", label: "Instagram achado no site", default: "Achei o Instagram de vocês no site: {handle} 📸 É esse mesmo?" },
       { key: "instagram.opt_sim", label: "Opção: conectar", default: "Conectar Instagram" },
       { key: "instagram.opt_edit", label: "Opção: corrigir @", default: "Corrigir @" },
       { key: "instagram.opt_manual", label: "Opção: informar @", default: "Informar meu @" },
@@ -2430,17 +2430,15 @@ export function OnboardingPreview({
             }
           }
           const igh = cleanField(igHandleRef.current || "");
-          // @ achado no PRÓPRIO site → conecta sem perguntar.
-          if (igFromSiteRef.current && igh) {
-            await say(carroChefe ? tx("instagram.l1", { carro_chefe: carroChefe }) : tx("instagram.l1_alt"));
-            await say(tx("instagram.found_on_site", { handle: igh }));
-            igPromiseRef.current = fetchInstagram(igh);
-            if (!cancelled) setNode("instagram_connecting");
-            break;
-          }
           await say(carroChefe ? tx("instagram.l1", { carro_chefe: carroChefe }) : tx("instagram.l1_alt"));
           if (igh) {
-            await say(tx("instagram.l2_found", { handle: igh }));
+            // Sempre confirma com o usuário antes de conectar — mesmo quando
+            // achamos o @ no próprio site (evita conectar o perfil errado).
+            await say(
+              igFromSiteRef.current
+                ? tx("instagram.found_on_site", { handle: igh })
+                : tx("instagram.l2_found", { handle: igh }),
+            );
             decide(forceIg, null, [
               {
                 label: tx("instagram.opt_sim"),
