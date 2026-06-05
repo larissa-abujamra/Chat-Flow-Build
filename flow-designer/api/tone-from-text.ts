@@ -53,7 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "perplexity/sonar-pro",
+        // É ANÁLISE de um texto já fornecido (não é busca na web) → usamos um
+        // modelo instruct confiável com reasoning DESLIGADO (a mesma convenção dos
+        // outros extratores deste app). O perplexity/sonar-pro, por ser modelo de
+        // BUSCA, devolvia {tom:"",exemplo:""} em blocos grandes de legendas — ele
+        // tentava "pesquisar" o texto em vez de só responder o JSON pedido.
+        model: "google/gemini-2.5-flash",
+        reasoning: { enabled: false },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
