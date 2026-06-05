@@ -1605,8 +1605,14 @@ export function OnboardingPreview({
       // pra "🍫" e "🍫️" não escaparem do filtro de já-sugeridos.
       const stripVS = (s: string) => s.replace(/️/g, "");
       const avoidNorm = new Set(avoid.map(stripVS));
+      // Aceita só tokens que são DE FATO emoji (tem pictograma, sem letras) —
+      // descarta palavras que o modelo às vezes inclui na lista (ex.: "familia").
+      const isEmoji = (s: string) => {
+        const t = s.trim();
+        return !!t && !/\p{L}/u.test(t) && /\p{Extended_Pictographic}/u.test(t);
+      };
       return arr
-        .filter((e: unknown) => typeof e === "string" && e.trim() && !avoidNorm.has(stripVS(e as string)))
+        .filter((e: unknown) => typeof e === "string" && isEmoji(e as string) && !avoidNorm.has(stripVS(e as string)))
         .slice(0, 10);
     } catch {
       return [];

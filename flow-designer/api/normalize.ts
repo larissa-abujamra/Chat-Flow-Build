@@ -43,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   (avoid.length
                     ? `NÃO use nenhum destes (já foram sugeridos): ${avoid.join(" ")}. Traga um conjunto DIFERENTE. `
                     : "") +
+                  "Cada item DEVE ser um ÚNICO emoji Unicode — NUNCA palavras, texto ou descrições (ex.: nada de \"familia\", use 👨‍👩‍👧). " +
                   "Responda SOMENTE JSON: {\"emojis\":[\"🍫\",\"🧁\", ...]}.",
               },
               {
@@ -65,9 +66,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // contam como diferentes e emojis repetidos passam pelo filtro de "avoid".
         const stripVS = (s: string) => s.replace(/️/g, "");
         const avoidSet = new Set(avoid.map(stripVS));
+        // Só aceita tokens que são DE FATO emoji: tem pictograma e nenhuma letra.
+        // Bloqueia o modelo de devolver palavras soltas (ex.: "familia") como item.
+        const isEmoji = (s: string) => {
+          const t = s.trim();
+          return !!t && !/\p{L}/u.test(t) && /\p{Extended_Pictographic}/u.test(t);
+        };
         res.status(200).json({
           emojis: list
-            .filter((e: unknown) => typeof e === "string" && !avoidSet.has(stripVS(e as string)))
+            .filter((e: unknown) => typeof e === "string" && isEmoji(e as string) && !avoidSet.has(stripVS(e as string)))
             .slice(0, 10),
         });
         return;
