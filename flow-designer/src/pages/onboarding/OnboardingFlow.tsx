@@ -103,6 +103,9 @@ interface IgData {
   link: string;
   fotoPerfil: string;
   ehComercial: boolean;
+  // Legendas dos posts recentes — amostra real do jeito de falar da marca,
+  // usada pra inferir o tom de voz (a promessa "uso suas legendas").
+  captions: string[];
 }
 
 const CLIENT_Q = "Oii, vocês fazem bolo de pote?";
@@ -1444,6 +1447,8 @@ export function OnboardingPreview({
   const cnpjPromiseRef = useRef<Promise<CnpjData | null> | null>(null);
   const manualCnpjRef = useRef(false);
   const igPromiseRef = useRef<Promise<IgData | null> | null>(null);
+  // legendas dos posts do Instagram já conectado — fonte do tom de voz no fireScrapes
+  const igCaptionsRef = useRef<string[]>([]);
   const catalogPromiseRef = useRef<Promise<CatalogItem[]> | null>(null);
   // varredura robusta do site confirmado (catálogo + tom + @ do Instagram)
   const siteScrapePromiseRef = useRef<Promise<SiteScrape | null> | null>(null);
@@ -1780,6 +1785,9 @@ export function OnboardingPreview({
         link: String(json.link || ""),
         fotoPerfil: String(json.fotoPerfil || ""),
         ehComercial: Boolean(json.ehComercial),
+        captions: Array.isArray(json.captions)
+          ? json.captions.filter((c: unknown): c is string => typeof c === "string" && c.trim().length > 0)
+          : [],
       };
     } catch {
       return null;
@@ -1852,12 +1860,13 @@ export function OnboardingPreview({
   // dados do negócio (preços, telefones etc.).
   const analyzeToneFromText = async (
     text: string,
+    source?: "instagram" | "conversas",
   ): Promise<{ tom: string; exemplo: string } | null> => {
     try {
       const r = await fetch(`${import.meta.env.BASE_URL}api/tone-from-text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, source }),
       });
       const json = await r.json();
       if (!r.ok || json.error) return null;
@@ -2055,20 +2064,43 @@ export function OnboardingPreview({
     const igh = cleanField(igHandleRef.current || "");
     const siteUrl = cleanField(siteRef.current);
     const sc = siteScrapeRef.current;
-    // Pesquisa/tom: prefere a varredura do site; cai pro Sonar se veio vazia.
-    researchPromiseRef.current = sc && sc.tom
-      ? Promise.resolve<Research>({
-          resumo: sc.resumo,
+    // Tom de voz, por ordem de qualidade da amostra:
+    //  1) LEGENDAS reais do Instagram (melhor sinal do jeito de falar da marca);
+    //  2) varredura do site confirmado;
+    //  3) busca na web (Sonar) como último recurso.
+    // Os demais campos (resumo/produtos/horário/contato) vêm sempre da varredura
+    // do site quando existir — só tom/exemplo passam a vir das legendas.
+    const caps = igCaptionsRef.current.filter(Boolean);
+    const captionText = caps.join("\n\n").slice(0, 8000);
+    if (captionText.length >= 60) {
+      researchPromiseRef.current = analyzeToneFromText(captionText, "instagram").then(
+        (t): Research => ({
+          resumo: sc?.resumo || "",
           website: siteUrl,
-          produtos: sc.produtos,
-          tom: sc.tom,
-          exemplo: sc.exemplo,
-          horario: sc.horario,
-          telefone: sc.telefone,
-          endereco: sc.endereco,
+          produtos: sc?.produtos || [],
+          tom: (t?.tom || sc?.tom || "").trim(),
+          exemplo: (t?.exemplo || sc?.exemplo || "").trim(),
+          horario: sc?.horario || "",
+          telefone: sc?.telefone || "",
+          endereco: sc?.endereco || "",
           citations: [],
-        })
-      : doResearch(biz, { site: siteUrl, instagram: igh, setor: setorRef.current });
+        }),
+      );
+    } else if (sc && sc.tom) {
+      researchPromiseRef.current = Promise.resolve<Research>({
+        resumo: sc.resumo,
+        website: siteUrl,
+        produtos: sc.produtos,
+        tom: sc.tom,
+        exemplo: sc.exemplo,
+        horario: sc.horario,
+        telefone: sc.telefone,
+        endereco: sc.endereco,
+        citations: [],
+      });
+    } else {
+      researchPromiseRef.current = doResearch(biz, { site: siteUrl, instagram: igh, setor: setorRef.current });
+    }
     // Catálogo: prefere os produtos da varredura; senão raspa via /api/catalog.
     if (bizTypeRef.current === "servicos") {
       catalogPromiseRef.current = null;
@@ -2469,7 +2501,7 @@ export function OnboardingPreview({
           if (igPromiseRef.current) {
             ig = await igPromiseRef.current;
             if (cancelled) return;
-            if (ig) setIgData(ig);
+            if (ig) { setIgData(ig); igCaptionsRef.current = ig.captions || []; }
           }
           markExtraDone(connBlock);
           await wait(ig ? 800 : 1600);
@@ -3084,7 +3116,7 @@ export function OnboardingPreview({
     setSetor(""); setorRef.current = "";
     setCity(""); cityRef.current = "";
     setServices([]); setPlaceAddr(""); setPlaceHorario(""); setPlaceTelefone(""); setPlaceResults([]);
-    setCnpjData(null); setIgData(null); setCatalogItems([]);
+    setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
@@ -3135,7 +3167,7 @@ export function OnboardingPreview({
     setCity(""); cityRef.current = "";
     setCarroChefe(""); setTone(""); setEmoji(""); setTextDraft("");
     setServices([]); setPlaceAddr(""); setPlaceHorario(""); setPlaceTelefone(""); setPlaceResults([]);
-    setCnpjData(null); setIgData(null); setCatalogItems([]);
+    setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
     researchPromiseRef.current = null;
     normalizePromiseRef.current = null;
