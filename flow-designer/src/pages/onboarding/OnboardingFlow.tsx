@@ -363,8 +363,8 @@ const FLOW_NODES: FlowNodeDef[] = [
     fields: [
       { key: "instagram.l1", label: "Destaque (com carro-chefe)", default: "Show, vou dar destaque pro {carro_chefe}." },
       { key: "instagram.l1_alt", label: "Destaque (sem carro-chefe)", default: "Show!" },
-      { key: "instagram.l2", label: "Convite", default: "Quer conectar seu Instagram pra eu aprender seu jeito de falar? Uso suas DMs e legendas só pra captar o tom.", multiline: true },
-      { key: "instagram.l2_found", label: "Instagram encontrado", default: "Achei seu Instagram: @{handle}. Quer que eu conecte? Uso suas legendas e DMs pra aprender seu tom e puxar mais do seu catálogo.", multiline: true },
+      { key: "instagram.l2", label: "Convite", default: "Quer conectar seu Instagram pra eu aprender seu jeito de falar? Leio as legendas dos seus posts só pra captar o tom.", multiline: true },
+      { key: "instagram.l2_found", label: "Instagram encontrado", default: "Achei seu Instagram: @{handle}. Quer que eu conecte? Leio as legendas dos seus posts pra aprender seu tom e puxar mais do seu catálogo.", multiline: true },
       { key: "instagram.scanning", label: "Varrendo o site", default: "Deixa eu dar uma olhada no site de vocês pra já adiantar algumas coisas... 🔎" },
       { key: "instagram.found_on_site", label: "Instagram achado no site", default: "Achei o Instagram de vocês no site: {handle} 📸 É esse mesmo?" },
       { key: "instagram.opt_sim", label: "Opção: conectar", default: "Conectar Instagram" },
@@ -752,7 +752,7 @@ function ConnectingBlock({ done }: { done?: boolean }) {
           {done ? "Leitura concluída" : "Conectando ao Instagram"}
         </p>
         <p className="text-xs text-gray-500">
-          {done ? "Veja o resultado abaixo." : "Lendo DMs e legendas para captar o tom…"}
+          {done ? "Veja o resultado abaixo." : "Lendo as legendas dos seus posts para captar o tom…"}
         </p>
       </div>
       <StatusSpinner done={done} />
