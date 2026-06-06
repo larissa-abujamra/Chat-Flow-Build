@@ -83,7 +83,7 @@ const FLOW_A: FlowDefinition = {
       data: {
         type: 'question',
         texto:
-          'Agora falando do seu tom de voz, que é como o Waz atenderá seus clientes via Whatsapp.\n\nPodemos fazer a conexão com seu Instagram e puxar de como você responde seus clientes via DM, ou você me exportar algumas conversas do whatsapp de atendimento.\n\nComo você prefere fazer?',
+          'Agora falando do seu tom de voz, que é como o Waz atenderá seus clientes via Whatsapp.\n\nPodemos fazer a conexão com seu Instagram e puxar as legendas dos seus posts pra aprender como você fala, ou você me exportar algumas conversas do whatsapp de atendimento.\n\nComo você prefere fazer?',
         opcoes: [
           { id: 'fa-q-tom-r1', label: 'Conectar Instagram' },
           { id: 'fa-q-tom-r2', label: 'Exportar conversas' },

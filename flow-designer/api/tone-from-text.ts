@@ -23,17 +23,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (text.length > 12000) text = text.slice(0, 12000);
 
+    // `source` adapta a moldura do prompt à origem do texto. Legendas do Instagram
+    // são a própria empresa falando (não há "cliente" pra separar), então o
+    // enquadramento muda. Default: conversas/atendimentos (export do WhatsApp etc.).
+    const source = String(body.source || "").trim().toLowerCase();
+    const isInstagram = source === "instagram" || source === "captions";
+
     const systemPrompt =
-      "Você analisa o ESTILO e o TOM DE VOZ de conversas reais de atendimento de um negócio brasileiro. " +
+      "Você analisa o ESTILO e o TOM DE VOZ de um negócio brasileiro a partir de textos reais escritos pela própria empresa. " +
       "Responda SOMENTE com JSON válido, sem markdown e sem texto extra. " +
       "Descreva apenas o jeito de escrever (formalidade, gírias, emojis, simpatia, ritmo). " +
       "NUNCA invente nem extraia fatos do negócio (preços, telefones, endereços, produtos, horários).";
 
+    const fonteLabel = isInstagram
+      ? "Abaixo estão LEGENDAS de posts recentes do Instagram da própria empresa. Analise como a EMPRESA escreve."
+      : "Abaixo estão trechos de conversas/atendimentos reais. Analise como a EMPRESA escreve (não o cliente).";
+    const blocoLabel = isInstagram ? "LEGENDAS DO INSTAGRAM" : "CONVERSAS";
+
     const userPrompt =
-      "Abaixo estão trechos de conversas/atendimentos reais. " +
-      "Analise como a EMPRESA escreve (não o cliente). " +
-      'Retorne exatamente este JSON: {"tom":"de 3 a 6 palavras descrevendo o tom, ex: descontraído, direto e simpático","exemplo":"uma resposta curta (1 a 2 frases) que a empresa daria nesse mesmo tom a um cliente, SEM citar preços, telefones ou endereços específicos"}.\n\n' +
-      "CONVERSAS:\n" +
+      fonteLabel + " " +
+      'Retorne exatamente este JSON: {"tom":"de 3 a 6 palavras descrevendo o tom, ex: descontraído, direto e simpático","exemplo":"uma resposta curta (1 a 2 frases) que a empresa daria nesse mesmo tom a um cliente no WhatsApp, SEM citar preços, telefones ou endereços específicos"}.\n\n' +
+      blocoLabel + ":\n" +
       text;
 
     const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -43,7 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "perplexity/sonar-pro",
+        // É ANÁLISE de um texto já fornecido (não é busca na web) → usamos um
+        // modelo instruct confiável com reasoning DESLIGADO (a mesma convenção dos
+        // outros extratores deste app). O perplexity/sonar-pro, por ser modelo de
+        // BUSCA, devolvia {tom:"",exemplo:""} em blocos grandes de legendas — ele
+        // tentava "pesquisar" o texto em vez de só responder o JSON pedido.
+        model: "google/gemini-2.5-flash",
+        reasoning: { enabled: false },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

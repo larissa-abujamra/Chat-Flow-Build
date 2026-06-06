@@ -182,6 +182,38 @@ export interface PlaceResult {
   // pré-preencher entrega/retirada no onboarding. undefined = desconhecido.
   delivery?: boolean;
   takeout?: boolean;
+  // Nomes de recurso das fotos do Google Places (ex.: "places/X/photos/Y").
+  // Resolvidos depois em URLs sem chave via resolveGooglePhotos.
+  fotos?: string[];
+}
+
+// Resolve nomes de foto do Places em URLs públicas SEM expor a API key: o
+// endpoint /media com skipHttpRedirect=true devolve { photoUri } já apontando
+// pro googleusercontent (sem chave). Best-effort e em paralelo — falha vira
+// lista menor, nunca quebra. Nunca inventa: só URLs reais retornadas pela API.
+export async function resolveGooglePhotos(
+  apiKey: string,
+  names: string[],
+  maxPx = 800,
+): Promise<string[]> {
+  const want = (names || []).filter(Boolean).slice(0, 3);
+  if (!want.length) return [];
+  const out = await Promise.all(
+    want.map(async (name) => {
+      try {
+        const r = await fetch(
+          `https://places.googleapis.com/v1/${name}/media?maxWidthPx=${maxPx}&maxHeightPx=${maxPx}&skipHttpRedirect=true`,
+          { headers: { "X-Goog-Api-Key": apiKey } },
+        );
+        if (!r.ok) return "";
+        const j = (await r.json()) as { photoUri?: string };
+        return String(j?.photoUri || "");
+      } catch {
+        return "";
+      }
+    }),
+  );
+  return out.filter(Boolean);
 }
 
 // Converte uma hora "HH:MM" para o formato compacto pt-BR: "09:00"→"9h",
@@ -322,6 +354,7 @@ export async function fetchGooglePlaces(
           "places.addressComponents",
           "places.delivery",
           "places.takeout",
+          "places.photos",
         ].join(","),
       },
       body: JSON.stringify({
@@ -360,6 +393,12 @@ export async function fetchGooglePlaces(
           website: s(pl.websiteUri),
           delivery: typeof pl.delivery === "boolean" ? pl.delivery : undefined,
           takeout: typeof pl.takeout === "boolean" ? pl.takeout : undefined,
+          fotos: Array.isArray(pl.photos)
+            ? (pl.photos as Record<string, unknown>[])
+                .slice(0, 3)
+                .map((ph) => String(ph?.name || ""))
+                .filter(Boolean)
+            : [],
         } as PlaceResult,
       };
     });
@@ -991,6 +1030,39 @@ export function extractMeta(html: string): string {
     kw && `Palavras-chave: ${kw}`,
   ].filter(Boolean);
   return parts.join("\n");
+}
+
+// Extrai imagens REAIS da página: og:image/twitter:image (alta confiança) +
+// algumas imagens de conteúdo. Resolve URLs relativas, descarta data:/svg e
+// ícones/logos minúsculos por heurística de nome. Dedup + cap. Nunca inventa.
+export function extractImages(html: string, baseUrl: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const v = (raw || "").trim().replace(/&amp;/gi, "&");
+    if (!v || /^data:/i.test(v)) return;
+    let abs = "";
+    try { abs = new URL(v, baseUrl).toString(); } catch { return; }
+    if (!/^https?:\/\//i.test(abs)) return;
+    if (/\.svg(\?|$)/i.test(abs)) return;
+    if (/sprite|icon|favicon|logo-|placeholder|pixel|1x1|blank/i.test(abs)) return;
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    out.push(abs);
+  };
+  // og:image / twitter:image primeiro (capa da marca, melhor sinal)
+  for (const re of [
+    /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/gi,
+    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/gi,
+  ]) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html))) add(m[1]);
+  }
+  // imagens de conteúdo (inclui lazy-load: data-src/srcset)
+  const imgRe = /<img\b[^>]*?(?:data-src|data-original|src)=["']([^"']+)["'][^>]*>/gi;
+  let im: RegExpExecArray | null;
+  while ((im = imgRe.exec(html)) && out.length < 12) add(im[1]);
+  return out.slice(0, 10);
 }
 
 // Extrai o @ do Instagram a partir do HTML bruto do site (links no rodapé,
