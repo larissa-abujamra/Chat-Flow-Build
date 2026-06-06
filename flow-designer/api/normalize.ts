@@ -35,10 +35,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           {
             type: "text",
             text:
-              "Você seleciona fotos LIMPAS de PRODUTO pra vitrine de um negócio. Para cada imagem (na ordem), MANTENHA somente se for uma foto real e limpa do produto — pratos/comida/bebida apetitosa, itens à venda ou o resultado do serviço, SEM texto promocional sobreposto. " +
-              "DESCARTE: logos, banners e peças promocionais, qualquer imagem com TEXTO/CHAMADA sobreposta ou logotipo (mesmo que tenha comida ao fundo), botões, anúncios, fachadas, ambiente/salão vazio, mapas, prints e gráficos genéricos. " +
-              "Na dúvida entre uma peça de marketing e uma foto limpa do prato, fique com a foto limpa. " +
-              "Responda SOMENTE JSON: {\"keep\":[índices base-0 das fotos limpas de produto, melhores primeiro]}.",
+              "Você escolhe FOTOS do produto pra vitrine de um negócio. " +
+              "MANTENHA toda imagem que for PREDOMINANTEMENTE uma fotografia do produto — prato/comida/bebida/item à venda ou o resultado do serviço (a comida ocupa a maior parte do quadro). Uma marca d'água pequena ou um logo discreto NÃO desqualifica uma boa foto de comida. " +
+              "DESCARTE imagens que são PEÇAS DE DESIGN/PROPAGANDA, não foto de produto: cartazes/banners/posts de campanha ou evento com texto grande, slogan ou chamada (ex.: 'ARENA COCO BAMBU', 'A NOSSA SELEÇÃO ESTÁ CONVOCADA'), logotipos, selos, botões, pessoas posando para a marca, fachadas, salão/ambiente vazio, mapas, prints e gráficos. " +
+              "Critério: se mais da metade da imagem é texto/arte/propaganda → DESCARTE; se é majoritariamente a comida/produto → MANTENHA. Na dúvida entre foto de comida e propaganda, fique com a foto de comida. " +
+              "Responda SOMENTE JSON: {\"keep\":[índices base-0 das fotos de produto, melhores primeiro]}.",
           },
         ];
         for (const u of urls) content.push({ type: "image_url", image_url: { url: u } });
