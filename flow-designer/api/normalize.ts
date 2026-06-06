@@ -15,6 +15,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let business = "";
   let city = "";
   try {
+    // ── Modo "filtrar fotos" (visão) ──────────────────────────────────────
+    // Recebe uma lista de URLs de imagem e usa um modelo de VISÃO pra manter só
+    // as que mostram o PRODUTO/pratos/itens do negócio — descartando logos,
+    // banners promocionais, anúncios, texto, fachadas e gráficos genéricos.
+    // Fail-open: sem chave/erro → mantém todas (nunca some com as fotos).
+    const imagesReq = (body as Record<string, unknown>).classifyImages as
+      | { urls?: unknown }
+      | undefined;
+    if (imagesReq && typeof imagesReq === "object") {
+      const urls = Array.isArray(imagesReq.urls)
+        ? (imagesReq.urls as unknown[]).filter((u): u is string => typeof u === "string" && /^https?:\/\//i.test(u)).slice(0, 12)
+        : [];
+      const allIdx = urls.map((_, i) => i);
+      const iKey = process.env.OPENROUTER_API_KEY;
+      if (!iKey || urls.length <= 3) { res.status(200).json({ keep: allIdx }); return; }
+      try {
+        const content: Record<string, unknown>[] = [
+          {
+            type: "text",
+            text:
+              "Você seleciona fotos LIMPAS de PRODUTO pra vitrine de um negócio. Para cada imagem (na ordem), MANTENHA somente se for uma foto real e limpa do produto — pratos/comida/bebida apetitosa, itens à venda ou o resultado do serviço, SEM texto promocional sobreposto. " +
+              "DESCARTE: logos, banners e peças promocionais, qualquer imagem com TEXTO/CHAMADA sobreposta ou logotipo (mesmo que tenha comida ao fundo), botões, anúncios, fachadas, ambiente/salão vazio, mapas, prints e gráficos genéricos. " +
+              "Na dúvida entre uma peça de marketing e uma foto limpa do prato, fique com a foto limpa. " +
+              "Responda SOMENTE JSON: {\"keep\":[índices base-0 das fotos limpas de produto, melhores primeiro]}.",
+          },
+        ];
+        for (const u of urls) content.push({ type: "image_url", image_url: { url: u } });
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 30000);
+        const iRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${iKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            reasoning: { enabled: false },
+            messages: [{ role: "user", content }],
+            max_tokens: 120,
+          }),
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(timer));
+        if (!iRes.ok) { res.status(200).json({ keep: allIdx }); return; }
+        const iData: any = await iRes.json();
+        const parsed = extractJson(iData?.choices?.[0]?.message?.content || "");
+        const keepRaw = Array.isArray(parsed.keep) ? parsed.keep : [];
+        const keep = keepRaw
+          .map((n: unknown) => Number(n))
+          .filter((n: number) => Number.isInteger(n) && n >= 0 && n < urls.length);
+        // dedupe preservando ordem; se vier vazio, mantém todas (fail-open).
+        const seen = new Set<number>();
+        const out = keep.filter((n: number) => (seen.has(n) ? false : (seen.add(n), true)));
+        res.status(200).json({ keep: out.length ? out : allIdx }); return;
+      } catch {
+        res.status(200).json({ keep: allIdx }); return;
+      }
+    }
+
     // ── Modo "sugerir emojis" ─────────────────────────────────────────────
     // Sugere emojis que combinam com o tom de voz + tipo de negócio + bio do
     // Instagram. Usado quando o lojista escolhe usar emojis "sempre/às vezes".
