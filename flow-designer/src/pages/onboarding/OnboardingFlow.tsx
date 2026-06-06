@@ -1448,6 +1448,7 @@ export function OnboardingPreview({
   const [placeTelefone, setPlaceTelefone] = useState("");
   const [placeFotos, setPlaceFotos] = useState<string[]>([]); // fotos do Google Places da loja escolhida
   const [siteImages, setSiteImages] = useState<string[]>([]);  // fotos extraídas do site da marca
+  const [brandPhotos, setBrandPhotos] = useState<string[]>([]); // fotos FILTRADAS por visão (só produto/pratos)
   const [ifoodStoreInfo, setIfoodStoreInfo] = useState<StoreInfo | null>(null); // taxa/mínimo/preparo/nota do iFood
   const ifoodStoreInfoRef = useRef<StoreInfo | null>(null); // leitura síncrona no motor do fluxo (fulfillment)
   const [placeResults, setPlaceResults] = useState<PlaceCandidate[]>([]);
@@ -1651,6 +1652,49 @@ export function OnboardingPreview({
 
   // Sugere emojis que combinam com o tom de voz + tipo de negócio + bio do
   // Instagram que descobrimos. Fail-open: erro/timeout → [] (sem sugestão).
+  // Junta as fotos candidatas da marca (site + Instagram + iFood + Places), na
+  // ordem de prioridade, deduplicadas. URLs ORIGINAIS (o proxy é aplicado só na
+  // hora de exibir/persistir).
+  const assembleCandidatePhotos = (): string[] =>
+    Array.from(
+      new Set(
+        [
+          ...siteImages,
+          ...(igData?.postImages || []),
+          igData?.fotoPerfil || "",
+          ifoodStoreInfo?.logo || "",
+          ...placeFotos,
+        ].filter(Boolean),
+      ),
+    );
+
+  // Filtra as candidatas por VISÃO (mantém só fotos de produto/pratos, descarta
+  // logos/banners/anúncios). Fail-open: erro/timeout → devolve as originais.
+  const selectBrandPhotos = async (urls: string[]): Promise<string[]> => {
+    if (urls.length <= 3) return urls;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 28000);
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classifyImages: { urls } }),
+        signal: ctrl.signal,
+      });
+      const j = await r.json();
+      const keep = Array.isArray(j?.keep) ? j.keep : [];
+      const picked = keep
+        .map((n: unknown) => Number(n))
+        .filter((n: number) => Number.isInteger(n) && n >= 0 && n < urls.length)
+        .map((n: number) => urls[n]);
+      return picked.length ? picked : urls;
+    } catch {
+      return urls;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const suggestEmojis = async (avoid: string[] = []): Promise<string[]> => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 6000);
@@ -2831,6 +2875,14 @@ export function OnboardingPreview({
         case "review": {
           // Resumo final de tudo que foi captado — confiança + verificação antes
           // de "configurado". O ReviewBlock lê o estado atual no render.
+          // Antes de montar o card: filtra as fotos por VISÃO (só produto/pratos,
+          // sem logos/banners/anúncios). Fail-open → usa as candidatas se falhar.
+          const candPhotos = assembleCandidatePhotos();
+          if (candPhotos.length) {
+            const kept = await selectBrandPhotos(candPhotos);
+            if (cancelled) return;
+            setBrandPhotos(kept);
+          }
           await say(tx("review.msg", { negocio: businessNameRef.current.trim() || "seu negócio" }));
           await extra("review");
           await say(tx("review.ask"));
@@ -2900,19 +2952,9 @@ export function OnboardingPreview({
             logo: ifoodStoreInfo?.logo || "",
           }
         : null,
-      // fotos descobertas do negócio (URLs originais — site + Instagram + iFood +
-      // Places). Guardamos as originais; o backend pode buscar/cachear depois.
-      fotos: Array.from(
-        new Set(
-          [
-            ...siteImages,
-            ...(igData?.postImages || []),
-            igData?.fotoPerfil || "",
-            ifoodStoreInfo?.logo || "",
-            ...placeFotos,
-          ].filter(Boolean),
-        ),
-      ).slice(0, 14),
+      // fotos do negócio (URLs originais) — já filtradas por visão quando
+      // disponível; senão, as candidatas brutas. O backend pode cachear depois.
+      fotos: (brandPhotos.length ? brandPhotos : assembleCandidatePhotos()).slice(0, 14),
       tom: tone,
       emoji,
       emojisSugeridos: emojiSet,
@@ -2929,7 +2971,7 @@ export function OnboardingPreview({
     } catch {
       /* ambiente sem localStorage — ignora */
     }
-  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, placeFotos, siteImages, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, ifoodStoreInfo, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
+  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, placeFotos, siteImages, brandPhotos, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, ifoodStoreInfo, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
 
   /* handlers */
   const handleChoice = (opt: Choice) => {
@@ -3269,7 +3311,7 @@ export function OnboardingPreview({
     setServices([]); setPlaceAddr(""); setPlaceHorario(""); setPlaceTelefone(""); setPlaceResults([]);
     setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
-    setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]);
+    setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]); setBrandPhotos([]);
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
     setCarroChefe(""); setTone(""); setEmoji(""); setEmojiSet([]); seenEmojisRef.current = [];
@@ -3321,7 +3363,7 @@ export function OnboardingPreview({
     setServices([]); setPlaceAddr(""); setPlaceHorario(""); setPlaceTelefone(""); setPlaceResults([]);
     setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
-    setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]);
+    setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]); setBrandPhotos([]);
     researchPromiseRef.current = null;
     normalizePromiseRef.current = null;
     placePromiseRef.current = null;
@@ -3412,19 +3454,12 @@ export function OnboardingPreview({
         { label: "Falar com humano", value: escalation },
         { label: "Vou começar", value: tasks.length ? `${tasks.length} tarefa${tasks.length > 1 ? "s" : ""}` : "" },
       ].filter((r) => r.value && r.value.trim());
-      // Fotos reais da marca, priorizando as DELA (site + Instagram), depois iFood
-      // e Google Places. Instagram/iFood passam pelo proxy (CDN bloqueia hotlink).
-      const reviewPhotos = Array.from(
-        new Set(
-          [
-            ...siteImages,
-            ...(igData?.postImages || []),
-            igData?.fotoPerfil || "",
-            ifoodStoreInfo?.logo || "",
-            ...placeFotos,
-          ].filter(Boolean),
-        ),
-      ).slice(0, 10).map(proxyImg);
+      // Fotos da marca já FILTRADAS por visão (só produto/pratos). Fallback pras
+      // candidatas brutas se a filtragem ainda não rodou. Instagram/iFood passam
+      // pelo proxy (CDN bloqueia hotlink).
+      const reviewPhotos = (brandPhotos.length ? brandPhotos : assembleCandidatePhotos())
+        .slice(0, 10)
+        .map(proxyImg);
       return (
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-full max-w-md">
           {reviewPhotos.length > 0 && (
