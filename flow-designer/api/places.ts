@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fetchGooglePlaces, webSearchWithFallback, extractJson } from './_lib/research-core.js'
+import { fetchGooglePlaces, webSearchWithFallback, extractJson, resolveGooglePhotos } from './_lib/research-core.js'
 
 export const config = { maxDuration: 60 }
 
@@ -65,11 +65,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             site: c.website,
             delivery: c.delivery,
             takeout: c.takeout,
+            fotos: c.fotos || [],
           }))
           .filter((c) => c.endereco);
         // cidade pedida primeiro, depois corta em 4.
         const candidatos = rankByCity(mapped, city).slice(0, 4);
-        if (candidatos.length) { res.status(200).json({ candidatos }); return; }
+        if (candidatos.length) {
+          // Resolve as fotos (nomes → URLs sem chave) só dos 4 finais, em
+          // paralelo. A chave nunca vai pro cliente: só as URLs públicas.
+          await Promise.all(
+            candidatos.map(async (c) => {
+              c.fotos = await resolveGooglePhotos(gKey, c.fotos || []);
+            }),
+          );
+          res.status(200).json({ candidatos }); return;
+        }
       }
     }
 

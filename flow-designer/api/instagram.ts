@@ -23,6 +23,21 @@ function collectCaptions(p: Record<string, unknown>): string[] {
   return out.slice(0, 15);
 }
 
+// Junta as imagens dos posts recentes (display_url) — assets visuais reais da
+// marca pro onboarding. Dedup + cap. Só URLs reais; nunca inventa.
+function collectPostImages(p: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const media = (p.owner_to_timeline_media as Record<string, unknown> | undefined)?.media;
+  if (Array.isArray(media)) {
+    for (const m of media) {
+      const url = String((m as Record<string, unknown>)?.display_url || "").trim();
+      if (url && !seen.has(url)) { seen.add(url); out.push(url); }
+    }
+  }
+  return out.slice(0, 8);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -74,9 +89,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       seguidores: Number(p.followers_count || 0),
       seguindo: Number(p.following_count || 0),
       link,
-      fotoPerfil: String(p.profile_pic_url || ""),
+      fotoPerfil: String(p.profile_pic_url_hd || p.profile_pic_url || ""),
       ehComercial: Boolean(p.is_business_account),
       captions,
+      postImages: collectPostImages(p),
     }); return;
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) }); return;

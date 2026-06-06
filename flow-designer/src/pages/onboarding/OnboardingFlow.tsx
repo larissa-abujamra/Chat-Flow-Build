@@ -5,7 +5,7 @@ import {
   X, ArrowRight, Check, Lock, RefreshCw, Headset,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil, Eye,
   GitBranch, List as ListIcon, GripVertical, Plus, Trash2, Maximize2,
-  MapPin, Phone, FileText, Globe, Store, ExternalLink,
+  MapPin, Phone, FileText, Globe, Store, ExternalLink, Clock,
 } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import "./_group.css";
@@ -62,6 +62,24 @@ interface PlaceCandidate {
   site: string;
   delivery?: boolean; // Google Places: faz entrega (undefined = desconhecido)
   takeout?: boolean;  // Google Places: faz retirada
+  fotos?: string[];   // fotos do Google Places (URLs públicas, sem chave)
+}
+
+// Dados operacionais da loja no iFood (modo store_info do ator): taxa, mínimo,
+// preparo, avaliação, logo. Reais — usados pra pré-preencher entrega + prova social.
+interface StoreInfo {
+  deliveryFee: number | null;
+  deliveryFeeType: string;
+  minimumOrder: number | null;
+  prepTime: number | null;
+  deliveryTime: number | null;
+  takeoutTime: number | null;
+  rating: number | null;
+  ratingCount: number | null;
+  priceRange: string;
+  logo: string;
+  mainCategory: string;
+  available: boolean;
 }
 
 // Deduz o modo de atendimento (Entrega/Retirada/Entrega e retirada) a partir dos
@@ -75,6 +93,42 @@ function inferFulfillmentMode(c?: { delivery?: boolean; takeout?: boolean } | nu
   if (d) return "Entrega";
   if (t) return "Retirada";
   return "";
+}
+
+// Roteia uma imagem pelo nosso proxy quando o CDN dela bloqueia hotlink no
+// navegador (Instagram/Facebook, iFood). Assim as fotos da MARCA (do Instagram
+// e do iFood) aparecem de fato. Sites e Google Places carregam direto.
+function proxyImg(url: string): string {
+  if (!url) return url;
+  try {
+    const h = new URL(url).hostname;
+    if (/(^|\.)(fbcdn\.net|cdninstagram\.com|ifood\.com\.br)$/i.test(h)) {
+      return `${import.meta.env.BASE_URL}api/site-scrape?img=${encodeURIComponent(url)}`;
+    }
+  } catch {
+    /* url inválida → devolve como está */
+  }
+  return url;
+}
+
+// Formata um valor em BRL (ex.: 6.99 → "R$ 6,99"). Vazio quando não há valor.
+function brl(n: number | null | undefined): string {
+  return typeof n === "number" && Number.isFinite(n)
+    ? `R$ ${n.toFixed(2).replace(".", ",")}`
+    : "";
+}
+
+// Monta as regras de entrega a partir do store_info do iFood (taxa, mínimo,
+// tempo de entrega, preparo). Só inclui o que veio REAL; "" se nada útil — aí o
+// onboarding pergunta normalmente. Nunca inventa.
+function formatIfoodRegras(si: StoreInfo | null): string {
+  if (!si) return "";
+  const parts: string[] = [];
+  if (si.deliveryFee != null) parts.push(si.deliveryFee > 0 ? `taxa de entrega ${brl(si.deliveryFee)}` : "entrega grátis");
+  if (si.minimumOrder != null && si.minimumOrder > 0) parts.push(`pedido mínimo ${brl(si.minimumOrder)}`);
+  if (si.deliveryTime != null && si.deliveryTime > 0) parts.push(`entrega em ~${si.deliveryTime} min`);
+  if (si.prepTime != null && si.prepTime > 0) parts.push(`preparo ~${si.prepTime} min`);
+  return parts.join(", ");
 }
 
 interface CnpjData {
@@ -106,6 +160,8 @@ interface IgData {
   // Legendas dos posts recentes — amostra real do jeito de falar da marca,
   // usada pra inferir o tom de voz (a promessa "uso suas legendas").
   captions: string[];
+  // Imagens dos posts recentes (display_url) — assets visuais da marca.
+  postImages: string[];
 }
 
 const CLIENT_Q = "Oii, vocês fazem bolo de pote?";
@@ -201,6 +257,7 @@ interface SiteScrape {
   telefone: string;
   endereco: string;
   horario: string;
+  imagens: string[]; // fotos extraídas do site (og:image + conteúdo)
 }
 
 type CatalogItem = { nome: string; preco: string };
@@ -242,6 +299,7 @@ interface IFoodImportResult {
   connected: boolean;
   produtos: CatalogItem[];
   store?: { id: string; name: string };
+  storeInfo?: StoreInfo | null;
 }
 
 /* ---------- Editable copy registry (drives the builder) ---------- */
@@ -415,6 +473,7 @@ const FLOW_NODES: FlowNodeDef[] = [
     fields: [
       { key: "fulfillment.msg", label: "Pergunta (modo)", default: "Como seus clientes recebem os pedidos?" },
       { key: "fulfillment.detected", label: "Modo detectado", default: "Vi que vocês trabalham com {modo}." },
+      { key: "fulfillment.ifood", label: "Regras (do iFood)", default: "Peguei as suas regras de entrega direto do iFood: {regras}. ✅ Dá pra ajustar depois no painel.", multiline: true },
       { key: "fulfillment.opt_entrega", label: "Opção: entrega", default: "Entrega" },
       { key: "fulfillment.opt_retirada", label: "Opção: retirada", default: "Retirada" },
       { key: "fulfillment.opt_ambos", label: "Opção: os dois", default: "Entrega e retirada" },
@@ -708,10 +767,12 @@ function ContactBlock({
   cnpj,
   endereco,
   telefone,
+  horario,
 }: {
   cnpj: string;
   endereco: string;
   telefone: string;
+  horario?: string;
 }) {
   // Telefone removido do card de contato a pedido — segue descoberto e salvo no
   // perfil (pro agente usar), mas não é exibido nem confirmado aqui.
@@ -719,7 +780,12 @@ function ContactBlock({
   const rows = [
     { Icon: FileText, label: "CNPJ", value: cnpj ? formatCnpj(cnpj) : "[CNPJ — a confirmar]" },
     { Icon: MapPin, label: "Endereço", value: endereco || "[Endereço — a confirmar]" },
-  ];
+    // Horário/dias de funcionamento: SÓ exibimos se foi descoberto (Google/Receita).
+    // É achado automaticamente — nunca perguntamos. Sem horário, a linha some.
+    ...(horario && horario.trim()
+      ? [{ Icon: Clock, label: "Funcionamento", value: horario.trim(), wrap: true }]
+      : []),
+  ] as { Icon: typeof FileText; label: string; value: string; wrap?: boolean }[];
   return (
     <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
@@ -732,7 +798,7 @@ function ContactBlock({
             <r.Icon className="w-4 h-4 text-gray-400 shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{r.label}</p>
-              <p className="text-sm text-[#13161D] truncate">{r.value}</p>
+              <p className={`text-sm text-[#13161D] ${r.wrap ? "break-words" : "truncate"}`}>{r.value}</p>
             </div>
           </li>
         ))}
@@ -1380,6 +1446,10 @@ export function OnboardingPreview({
   const [placeAddr, setPlaceAddr] = useState("");
   const [placeHorario, setPlaceHorario] = useState("");
   const [placeTelefone, setPlaceTelefone] = useState("");
+  const [placeFotos, setPlaceFotos] = useState<string[]>([]); // fotos do Google Places da loja escolhida
+  const [siteImages, setSiteImages] = useState<string[]>([]);  // fotos extraídas do site da marca
+  const [ifoodStoreInfo, setIfoodStoreInfo] = useState<StoreInfo | null>(null); // taxa/mínimo/preparo/nota do iFood
+  const ifoodStoreInfoRef = useRef<StoreInfo | null>(null); // leitura síncrona no motor do fluxo (fulfillment)
   const [placeResults, setPlaceResults] = useState<PlaceCandidate[]>([]);
   const [cnpjData, setCnpjData] = useState<CnpjData | null>(null);
   const [igData, setIgData] = useState<IgData | null>(null);
@@ -1664,7 +1734,7 @@ export function OnboardingPreview({
       const json = await r.json();
       if (!r.ok || json.error || !Array.isArray(json.candidatos)) return [];
       return json.candidatos
-        .map((c: { nome?: string; endereco?: string; cidade?: string; categoria?: string; horario?: string; telefone?: string; site?: string; delivery?: boolean; takeout?: boolean }, i: number) => ({
+        .map((c: { nome?: string; endereco?: string; cidade?: string; categoria?: string; horario?: string; telefone?: string; site?: string; delivery?: boolean; takeout?: boolean; fotos?: unknown }, i: number) => ({
           id: `u${i + 1}`,
           nome: String(c?.nome || business).trim() || business,
           endereco: String(c?.endereco || "").trim(),
@@ -1675,6 +1745,7 @@ export function OnboardingPreview({
           site: String(c?.site || "").trim(),
           delivery: typeof c?.delivery === "boolean" ? c.delivery : undefined,
           takeout: typeof c?.takeout === "boolean" ? c.takeout : undefined,
+          fotos: Array.isArray(c?.fotos) ? (c.fotos as unknown[]).filter((u): u is string => typeof u === "string") : [],
         }))
         .filter((c: PlaceCandidate) => c.endereco);
     } catch {
@@ -1794,6 +1865,9 @@ export function OnboardingPreview({
         captions: Array.isArray(json.captions)
           ? json.captions.filter((c: unknown): c is string => typeof c === "string" && c.trim().length > 0)
           : [],
+        postImages: Array.isArray(json.postImages)
+          ? json.postImages.filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0)
+          : [],
       };
     } catch {
       return null;
@@ -1825,12 +1899,33 @@ export function OnboardingPreview({
             }))
             .filter((p: CatalogItem) => p.nome)
         : [];
+      const si = json.storeInfo && typeof json.storeInfo === "object" ? json.storeInfo : null;
+      const numOrNull = (v: unknown): number | null => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
       return {
         connected: true,
         produtos,
         store: json.store
           ? { id: String(json.store.id || ""), name: String(json.store.name || "") }
           : undefined,
+        storeInfo: si
+          ? {
+              deliveryFee: numOrNull(si.deliveryFee),
+              deliveryFeeType: String(si.deliveryFeeType || ""),
+              minimumOrder: numOrNull(si.minimumOrder),
+              prepTime: numOrNull(si.prepTime),
+              deliveryTime: numOrNull(si.deliveryTime),
+              takeoutTime: numOrNull(si.takeoutTime),
+              rating: numOrNull(si.rating),
+              ratingCount: numOrNull(si.ratingCount),
+              priceRange: String(si.priceRange || ""),
+              logo: String(si.logo || ""),
+              mainCategory: String(si.mainCategory || ""),
+              available: si.available === true,
+            }
+          : null,
       };
     } catch {
       return null;
@@ -2045,6 +2140,9 @@ export function OnboardingPreview({
         telefone: String(json.telefone || ""),
         endereco: String(json.endereco || ""),
         horario: String(json.horario || ""),
+        imagens: Array.isArray(json.imagens)
+          ? json.imagens.filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0)
+          : [],
       };
     } catch {
       return null;
@@ -2411,6 +2509,17 @@ export function OnboardingPreview({
           break;
         case "fulfillment": {
           // OPERACIONAL: como o cliente recebe. Sem isso o Waz não fecha pedido.
+          // 0) Se a loja no iFood já trouxe as regras (taxa/mínimo/preparo/tempo),
+          //    usamos direto — discover + display, SEM perguntar (igual ao horário).
+          const ifoodRegras = formatIfoodRegras(ifoodStoreInfoRef.current);
+          if (ifoodRegras) {
+            if (!fulfillmentModeRef.current) { setFulfillmentMode("Entrega"); fulfillmentModeRef.current = "Entrega"; }
+            setFulfillment(ifoodRegras);
+            await say(tx("fulfillment.ifood", { regras: ifoodRegras }));
+            await wait(300);
+            if (!cancelled) advanceFrom("fulfillment");
+            break;
+          }
           // Se o Google Places já indicou entrega/retirada (inferido no place_pick),
           // pulamos a pergunta e vamos direto pras regras — só confirmamos o modo.
           if (fulfillmentModeRef.current) {
@@ -2458,6 +2567,7 @@ export function OnboardingPreview({
             const sc = await siteScrapePromiseRef.current;
             if (cancelled) return;
             siteScrapeRef.current = sc;
+            if (sc?.imagens?.length) setSiteImages(sc.imagens);
             // @ achado no próprio site → conecta sem perguntar, mesmo que já
             // tivéssemos um @ vindo do CNPJ (o site corrobora a descoberta).
             if (sc?.instagram) {
@@ -2589,6 +2699,12 @@ export function OnboardingPreview({
           const r = await scrapeIfoodCatalog(ifoodFoundRef.current);
           if (cancelled) return;
           markExtraDone(ifoodConnBlock);
+          // dados operacionais da loja (taxa/mínimo/preparo/nota) — captados
+          // mesmo que o cardápio venha vazio; usados no fulfillment e na review.
+          if (r && !("configured" in r) && r.storeInfo) {
+            ifoodStoreInfoRef.current = r.storeInfo;
+            setIfoodStoreInfo(r.storeInfo);
+          }
           if (r && "configured" in r && r.configured === false) {
             // Sem token do Apify → honesto. Se já temos o link da loja, guardamos
             // e dizemos que a importação fica para quando estiver disponível;
@@ -2768,7 +2884,35 @@ export function OnboardingPreview({
       servicos: services,
       produtos: catalogItems,
       carroChefe,
-      ifood: ifoodFound ? { nome: ifoodFound.nome, url: ifoodFound.url, id: ifoodFound.id || null } : null,
+      ifood: ifoodFound
+        ? {
+            nome: ifoodFound.nome,
+            url: ifoodFound.url,
+            id: ifoodFound.id || null,
+            // dados operacionais reais do iFood (taxa/mínimo/preparo/nota/logo)
+            taxaEntrega: ifoodStoreInfo?.deliveryFee ?? null,
+            pedidoMinimo: ifoodStoreInfo?.minimumOrder ?? null,
+            tempoPreparo: ifoodStoreInfo?.prepTime ?? null,
+            tempoEntrega: ifoodStoreInfo?.deliveryTime ?? null,
+            nota: ifoodStoreInfo?.rating ?? null,
+            avaliacoes: ifoodStoreInfo?.ratingCount ?? null,
+            faixaPreco: ifoodStoreInfo?.priceRange || "",
+            logo: ifoodStoreInfo?.logo || "",
+          }
+        : null,
+      // fotos descobertas do negócio (URLs originais — site + Instagram + iFood +
+      // Places). Guardamos as originais; o backend pode buscar/cachear depois.
+      fotos: Array.from(
+        new Set(
+          [
+            ...siteImages,
+            ...(igData?.postImages || []),
+            igData?.fotoPerfil || "",
+            ifoodStoreInfo?.logo || "",
+            ...placeFotos,
+          ].filter(Boolean),
+        ),
+      ).slice(0, 14),
       tom: tone,
       emoji,
       emojisSugeridos: emojiSet,
@@ -2785,7 +2929,7 @@ export function OnboardingPreview({
     } catch {
       /* ambiente sem localStorage — ignora */
     }
-  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
+  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, placeFotos, siteImages, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, ifoodStoreInfo, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
 
   /* handlers */
   const handleChoice = (opt: Choice) => {
@@ -2862,6 +3006,7 @@ export function OnboardingPreview({
     setPlaceAddr(c.endereco);
     setPlaceHorario(c.horario);
     setPlaceTelefone(c.telefone);
+    setPlaceFotos(Array.isArray(c.fotos) ? c.fotos.filter(Boolean) : []);
     // o site oficial vindo do Google tem prioridade sobre o deduzido no CNPJ
     // (confirm_contact só preenche o site se este ainda estiver vazio).
     if (c.site) { setSite(c.site); siteRef.current = c.site; }
@@ -3124,6 +3269,7 @@ export function OnboardingPreview({
     setServices([]); setPlaceAddr(""); setPlaceHorario(""); setPlaceTelefone(""); setPlaceResults([]);
     setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
+    setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]);
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
     setCarroChefe(""); setTone(""); setEmoji(""); setEmojiSet([]); seenEmojisRef.current = [];
@@ -3175,6 +3321,7 @@ export function OnboardingPreview({
     setServices([]); setPlaceAddr(""); setPlaceHorario(""); setPlaceTelefone(""); setPlaceResults([]);
     setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
+    setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]);
     researchPromiseRef.current = null;
     normalizePromiseRef.current = null;
     placePromiseRef.current = null;
@@ -3238,6 +3385,7 @@ export function OnboardingPreview({
           cnpj={cnpjData?.cnpj || ""}
           endereco={placeAddr || cnpjData?.endereco || ""}
           telefone={placeTelefone || cnpjData?.telefone || ""}
+          horario={placeHorario || cnpjData?.horario || ""}
         />
       );
     if (e === "connecting") return <ConnectingBlock done={done} />;
@@ -3255,7 +3403,7 @@ export function OnboardingPreview({
         { label: "Horário", value: placeHorario || cnpjData?.horario || "" },
         { label: "Site", value: site },
         { label: "Instagram", value: igData?.username ? `@${igData.username}` : (igHandle || "") },
-        { label: "iFood", value: ifoodFound?.nome || "" },
+        { label: "iFood", value: [ifoodFound?.nome || "", ifoodStoreInfo?.rating != null ? `★ ${ifoodStoreInfo.rating}${ifoodStoreInfo.ratingCount ? ` (${ifoodStoreInfo.ratingCount})` : ""}` : ""].filter(Boolean).join(" · ") },
         { label: "Catálogo", value: catalogItems.length ? `${catalogItems.length} itens` : (services.length ? `${services.length} serviços` : "") },
         { label: "Carro-chefe", value: carroChefe },
         { label: "Entrega", value: [fulfillmentMode, fulfillment].filter(Boolean).join(" — ") },
@@ -3264,8 +3412,39 @@ export function OnboardingPreview({
         { label: "Falar com humano", value: escalation },
         { label: "Vou começar", value: tasks.length ? `${tasks.length} tarefa${tasks.length > 1 ? "s" : ""}` : "" },
       ].filter((r) => r.value && r.value.trim());
+      // Fotos reais da marca, priorizando as DELA (site + Instagram), depois iFood
+      // e Google Places. Instagram/iFood passam pelo proxy (CDN bloqueia hotlink).
+      const reviewPhotos = Array.from(
+        new Set(
+          [
+            ...siteImages,
+            ...(igData?.postImages || []),
+            igData?.fotoPerfil || "",
+            ifoodStoreInfo?.logo || "",
+            ...placeFotos,
+          ].filter(Boolean),
+        ),
+      ).slice(0, 10).map(proxyImg);
       return (
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm w-full max-w-md">
+          {reviewPhotos.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Fotos que encontrei</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {reviewPhotos.map((src) => (
+                  <img
+                    key={src}
+                    src={src}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 rounded-xl object-cover border border-gray-200 shrink-0 bg-gray-50"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumo do onboarding</p>
           <ul className="divide-y divide-gray-100">
             {rows.map((r) => (

@@ -11,6 +11,64 @@ export const config = { maxDuration: 60 }
 // finge. Nunca inventamos itens/preços: só repassamos o que o ator retornar.
 const APIFY_ACTOR = process.env.IFOOD_APIFY_ACTOR || "xmJ7nVZ3VrxjuFpmc";
 
+// Roda o ator do Apify num modo específico e devolve a lista do dataset (ou null
+// em qualquer falha — best-effort para dados secundários, sem quebrar o fluxo).
+async function runIfoodActor(
+  token: string,
+  mode: string,
+  storeId: string,
+): Promise<Record<string, unknown>[] | null> {
+  try {
+    const r = await fetch(
+      `https://api.apify.com/v2/acts/${encodeURIComponent(APIFY_ACTOR)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          store_id: storeId,
+          proxyCountry: "BR",
+          proxyGroups: ["RESIDENTIAL"],
+          useApifyProxy: true,
+          maxRetries: 1,
+          timeout: 120,
+        }),
+      },
+    );
+    if (!r.ok) return null;
+    const parsed = JSON.parse(await r.text());
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// Extrai os dados OPERACIONAIS da loja do payload do modo "store_info": taxa de
+// entrega, pedido mínimo, tempo de preparo/entrega, avaliação e logo. Tudo REAL —
+// usado pra pré-preencher as regras de entrega (sem perguntar) e dar prova social.
+function parseStoreInfo(arr: Record<string, unknown>[] | null) {
+  const sd = (arr && arr[0] && (arr[0].data as Record<string, unknown>)) || null;
+  if (!sd) return null;
+  const num = (v: unknown): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    deliveryFee: num(sd.delivery_fee),
+    deliveryFeeType: String(sd.type_delivery_fee || ""),
+    minimumOrder: num(sd.minimum_order_value),
+    prepTime: num(sd.preparation_time),
+    deliveryTime: num(sd.delivery_time),
+    takeoutTime: num(sd.takeout_time),
+    rating: num(sd.user_rating),
+    ratingCount: num(sd.user_rating_count),
+    priceRange: String(sd.price_range || ""),
+    logo: String(sd.logo || ""),
+    mainCategory: String(sd.main_category || ""),
+    available: sd.available === true || sd.available === "true",
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -42,6 +100,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: "Não encontrei o identificador da loja no link do iFood.",
       }); return;
     }
+
+    // Em PARALELO com o cardápio, lê os dados operacionais da loja (modo
+    // store_info): taxa, mínimo, preparo, avaliação, logo. Best-effort — se
+    // falhar, o cardápio segue normal e storeInfo volta null.
+    const storeInfoPromise = runIfoodActor(apifyToken, "store_info", storeId);
 
     // Lê o cardápio REAL via ator do Apify (run-sync, retorna os itens do
     // dataset). lat/long são opcionais para o ator; passamos só o store_id.
@@ -127,10 +190,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // resolve os dados operacionais da loja (best-effort, já estava rodando).
+    const storeInfo = parseStoreInfo(await storeInfoPromise);
+
     res.status(200).json({
       connected: true,
       store: { id: storeId, name: String(data.name || "") },
       produtos,
+      storeInfo,
     }); return;
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) }); return;
