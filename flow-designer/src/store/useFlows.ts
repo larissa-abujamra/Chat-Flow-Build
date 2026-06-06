@@ -1042,12 +1042,15 @@ const DEFAULTS: Record<string, FlowDefinition> = {
 }
 
 function createEmptyFlow(id: string): FlowDefinition {
-  // Novos fluxos nascem com o template COMPLETO do onboarding (Fluxo Stefano),
-  // já com os stepIds — então cada novo fluxo é uma experiência adaptável que o
-  // usuário pode reordenar/editar/excluir etapas. Deep-clone para não mutar o
-  // template; os ids internos de nós são mantidos (cada fluxo é salvo à parte).
-  const tpl = JSON.parse(JSON.stringify(FLOW_STEFANO)) as FlowDefinition
-  return { ...tpl, id, nome: 'Novo Fluxo' }
+  // Novos fluxos nascem em branco — só com o nó de início. O usuário monta o
+  // fluxo do zero a partir daí.
+  return {
+    id,
+    nome: 'Novo Fluxo',
+    scrapingEnabled: false,
+    nodes: [{ id: `${id}-start`, type: 'start', position: { x: 300, y: 200 }, data: { type: 'start' } }],
+    edges: [],
+  }
 }
 
 // ── localStorage fallback (used when Supabase is not configured) ─────────────
