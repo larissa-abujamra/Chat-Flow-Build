@@ -1,13 +1,72 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { htmlToText, extractInstagramFromHtml, extractMeta, extractSiteInfo, isSafePublicUrl } from './_lib/research-core.js'
+import { htmlToText, extractInstagramFromHtml, extractMeta, extractSiteInfo, extractImages, isSafePublicUrl } from './_lib/research-core.js'
 
 export const config = { maxDuration: 60 }
 
+// Hosts de CDN de imagem que o navegador NÃO consegue exibir por hotlink (bloqueio
+// por referer): Instagram/Facebook, iFood e Google. Só ESTES podem passar pelo
+// proxy de imagem — allowlist fechada pra evitar SSRF (a página jamais aponta
+// pra rede interna). O server fetch não manda referer, então a imagem volta.
+function isProxyableImageHost(host: string): boolean {
+  return /(^|\.)(fbcdn\.net|cdninstagram\.com|ifood\.com\.br|googleusercontent\.com)$/i.test(host);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   if (req.method === 'OPTIONS') { res.status(204).end(); return }
+
+  // ── Proxy de imagem (GET ?img=URL) ────────────────────────────────────
+  // Reexibe fotos da marca cujo CDN bloqueia hotlink (Instagram/iFood): busca a
+  // imagem no servidor (sem referer) e devolve os bytes pela NOSSA origem.
+  if (req.method === 'GET') {
+    const raw = String((req.query?.img as string) || "").trim();
+    // Valida cada URL (inclusive cada salto de redirect) contra a allowlist de
+    // host + o portão anti-SSRF. Só http(s) público de um CDN conhecido passa.
+    const allowed = (target: string): URL | null => {
+      let x: URL | null = null;
+      try { x = new URL(target); } catch { return null; }
+      if (x.protocol !== "https:" && x.protocol !== "http:") return null;
+      if (!isSafePublicUrl(target) || !isProxyableImageHost(x.hostname)) return null;
+      return x;
+    };
+    let cur = allowed(raw);
+    if (!cur) { res.status(400).json({ error: "URL de imagem inválida ou não permitida." }); return; }
+    try {
+      // SSRF: NÃO seguimos redirect automaticamente — cada salto é revalidado
+      // (host allowlistado + IP público), com teto de saltos. Um 302 pra rede
+      // interna é barrado em vez de seguido cegamente.
+      let r: Response | null = null;
+      for (let hop = 0; hop < 4; hop++) {
+        r = await fetch(cur.toString(), { redirect: "manual" });
+        if (r.status >= 300 && r.status < 400) {
+          const loc = r.headers.get("location");
+          const next = loc ? allowed(new URL(loc, cur).toString()) : null;
+          if (!next) { res.status(400).end(); return; }
+          cur = next;
+          continue;
+        }
+        break;
+      }
+      if (!r) { res.status(502).end(); return; }
+      // XSS: só imagens RASTER. SVG (image/svg+xml) é HTML executável servido na
+      // nossa origem → recusado. nosniff + CSP/sandbox como defesa extra caso o
+      // tipo seja confundido no futuro.
+      const ct = (r.headers.get("content-type") || "").toLowerCase().split(";")[0].trim();
+      if (!r.ok || !/^image\/(jpeg|jpg|png|webp|gif|avif|bmp)$/.test(ct)) { res.status(415).end(); return; }
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 6_000_000) { res.status(413).end(); return; } // teto 6MB
+      res.setHeader("Content-Type", ct);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.status(200).end(buf); return;
+    } catch {
+      res.status(502).end(); return;
+    }
+  }
+
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return }
 
   const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {}
@@ -54,6 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const igFromHtml = extractInstagramFromHtml(html);
+    const imagens = extractImages(html, url);
     const meta = extractMeta(html);
     const bodyText = htmlToText(html).slice(0, 9000);
     // Prioriza os metadados (título/descrição) — maior sinal — e completa
@@ -71,6 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       telefone: info?.telefone || "",
       endereco: info?.endereco || "",
       horario: info?.horario || "",
+      imagens,
       source: info ? "scrape" : "none",
     }); return;
   } catch (err) {
