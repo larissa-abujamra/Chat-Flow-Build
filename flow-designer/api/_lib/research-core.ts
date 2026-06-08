@@ -622,6 +622,55 @@ export const IFOOD_STOPWORDS = new Set([
   "de", "da", "do", "das", "dos", "e", "restaurante", "lanchonete", "bar",
   "cafe", "loja", "delivery", "comida", "ifood",
 ]);
+// Descobre o @ do Instagram de um negócio por BUSCA na web (Scrapingdog google),
+// quando o site/CNPJ não trouxeram um handle. Extrai handles instagram.com dos
+// resultados e devolve só os que compartilham um token significativo do nome do
+// negócio (evita perfis aleatórios). Nunca inventa: handles vêm de URLs REAIS dos
+// resultados. Retorna candidatos em ordem (melhor sobreposição primeiro).
+const IG_BAD_HANDLE =
+  /^(p|reel|reels|explore|accounts|about|developer|legal|privacy|tv|stories|share|direct|web|tags|locations|s)$/i;
+export async function discoverInstagramHandles(
+  sdKey: string,
+  business: string,
+  city: string,
+): Promise<string[]> {
+  try {
+    const query = `${business} ${city} instagram`.replace(/\s+/g, " ").trim();
+    const gUrl =
+      `https://api.scrapingdog.com/google?api_key=${encodeURIComponent(sdKey)}` +
+      `&query=${encodeURIComponent(query)}&country=br&results=10`;
+    const r = await fetch(gUrl);
+    if (!r.ok) return [];
+    const raw = await r.text();
+    const bizTokens = ifoodNormTokens(business).filter((t) => !IFOOD_STOPWORDS.has(t));
+    const seen = new Set<string>();
+    const scored: { handle: string; score: number; pos: number }[] = [];
+    const re = /instagram\.com\/([A-Za-z0-9._]{2,40})/gi;
+    let m: RegExpExecArray | null;
+    let pos = 0;
+    while ((m = re.exec(raw))) {
+      const handle = m[1].replace(/\/+$/, "");
+      if (!handle || IG_BAD_HANDLE.test(handle)) continue;
+      const key = handle.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const hTokens = new Set(ifoodNormTokens(handle));
+      // sobreposição: token do negócio aparece no handle (ou vice-versa por substring)
+      const overlap = bizTokens.filter(
+        (t) => hTokens.has(t) || key.includes(t) || t.includes(key),
+      ).length;
+      scored.push({ handle, score: overlap, pos: pos++ });
+    }
+    return scored
+      .filter((s) => s.score > 0) // exige ao menos 1 token do nome — sem isso é aleatório
+      .sort((a, b) => b.score - a.score || a.pos - b.pos)
+      .map((s) => s.handle)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
 export function ifoodNormTokens(s: string): string[] {
   return String(s || "")
     .toLowerCase()

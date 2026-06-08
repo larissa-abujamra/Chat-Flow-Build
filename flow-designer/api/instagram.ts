@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { discoverInstagramHandles } from './_lib/research-core.js'
 
 export const config = { maxDuration: 60 }
 
@@ -38,6 +39,43 @@ function collectPostImages(p: Record<string, unknown>): string[] {
   return out.slice(0, 8);
 }
 
+// Raspa um perfil do Instagram (scrapingdog) e devolve a resposta normalizada,
+// ou { encontrado:false } quando o perfil não existe / sem dados. Não lança.
+async function fetchProfile(key: string, username: string): Promise<Record<string, unknown>> {
+  const u = username
+    .trim().replace(/^@/, "")
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/\/.*$/, "").trim();
+  if (!u) return { encontrado: false };
+  const url = `https://api.scrapingdog.com/instagram/profile?api_key=${encodeURIComponent(key)}&username=${encodeURIComponent(u)}`;
+  let apiRes: Response, text: string;
+  try {
+    apiRes = await fetch(url);
+    text = await apiRes.text();
+  } catch {
+    return { encontrado: false };
+  }
+  let parsed: unknown = null;
+  try { parsed = JSON.parse(text); } catch { return { encontrado: false }; }
+  const p = (parsed || {}) as Record<string, unknown>;
+  if (!apiRes.ok || (!p.username && !p.full_name)) return { encontrado: false };
+  const links = Array.isArray(p.bio_links) ? (p.bio_links as Record<string, unknown>[]) : [];
+  const link = links.length ? String(links[0]?.url || "") : "";
+  return {
+    encontrado: true,
+    username: String(p.username || u),
+    nome: String(p.full_name || ""),
+    bio: String(p.bio || ""),
+    seguidores: Number(p.followers_count || 0),
+    seguindo: Number(p.following_count || 0),
+    link,
+    fotoPerfil: String(p.profile_pic_url_hd || p.profile_pic_url || ""),
+    ehComercial: Boolean(p.is_business_account),
+    captions: collectCaptions(p),
+    postImages: collectPostImages(p),
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -52,48 +90,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!key) {
       res.status(500).json({ error: "SCRAPINGDOG_API_KEY não configurada no ambiente." }); return;
     }
-    const username = String(body.username || "")
-      .trim()
-      .replace(/^@/, "")
-      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
-      .replace(/\/.*$/, "")
-      .trim();
+
+    // ── Modo "descobrir" ──────────────────────────────────────────────────
+    // Sem handle do site/CNPJ: acha o @ por BUSCA na web (handles instagram.com
+    // dos resultados, filtrados por sobreposição com o nome). Valida cada
+    // candidato raspando o perfil e exigindo um perfil REAL (seguidores + posts),
+    // pra não conectar um homônimo/perfil parado. Devolve o 1º que passar.
+    if (!body.username && (body.business || body.discover)) {
+      const business = String(body.business || "").trim();
+      const city = String(body.city || "").trim();
+      if (!business) { res.status(200).json({ encontrado: false }); return; }
+      const handles = await discoverInstagramHandles(key, business, city);
+      for (const h of handles) {
+        const prof = await fetchProfile(key, h);
+        // perfil precisa existir, ter posts e um mínimo de seguidores — senão
+        // é provavelmente o perfil errado (homônimo/parado). Nunca conecta no escuro.
+        if (
+          prof.encontrado &&
+          (Number(prof.seguidores) || 0) >= 50 &&
+          ((prof.postImages as string[])?.length || 0) > 0
+        ) {
+          res.status(200).json({ ...prof, descobertoPorBusca: true }); return;
+        }
+      }
+      res.status(200).json({ encontrado: false }); return;
+    }
+
+    const username = String(body.username || "").trim();
     if (!username) {
       res.status(400).json({ error: "Campo 'username' é obrigatório." }); return;
     }
-    const url = `https://api.scrapingdog.com/instagram/profile?api_key=${encodeURIComponent(key)}&username=${encodeURIComponent(username)}`;
-    const apiRes = await fetch(url);
-    const text = await apiRes.text();
-    let parsed: unknown = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      res.status(502).json({ error: "Resposta da API de Instagram não é JSON.", _raw: text.slice(0, 500) }); return;
-    }
-    const p = (parsed || {}) as Record<string, unknown>;
-    if (!apiRes.ok || (!p.username && !p.full_name)) {
-      res.status(200).json({ encontrado: false }); return;
-    }
-    const links = Array.isArray(p.bio_links) ? (p.bio_links as Record<string, unknown>[]) : [];
-    const link = links.length ? String(links[0]?.url || "") : "";
-    // Legendas dos posts recentes — a melhor amostra do JEITO DE FALAR da marca.
-    // O scraper de perfil já devolve até ~12 posts (owner_to_timeline_media) e os
-    // vídeos/reels (video_timeline), cada um com seu `caption`. Coletamos o texto
-    // real (sem inventar), deduplicamos e limitamos pra alimentar a análise de tom.
-    const captions = collectCaptions(p);
-    res.status(200).json({
-      encontrado: true,
-      username: String(p.username || username),
-      nome: String(p.full_name || ""),
-      bio: String(p.bio || ""),
-      seguidores: Number(p.followers_count || 0),
-      seguindo: Number(p.following_count || 0),
-      link,
-      fotoPerfil: String(p.profile_pic_url_hd || p.profile_pic_url || ""),
-      ehComercial: Boolean(p.is_business_account),
-      captions,
-      postImages: collectPostImages(p),
-    }); return;
+    const prof = await fetchProfile(key, username);
+    res.status(200).json(prof); return;
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) }); return;
   }

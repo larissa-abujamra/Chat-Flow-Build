@@ -423,6 +423,7 @@ const FLOW_NODES: FlowNodeDef[] = [
       { key: "instagram.l1_alt", label: "Destaque (sem carro-chefe)", default: "Show!" },
       { key: "instagram.l2", label: "Convite", default: "Quer conectar seu Instagram pra eu aprender seu jeito de falar? Leio as legendas dos seus posts só pra captar o tom.", multiline: true },
       { key: "instagram.l2_found", label: "Instagram encontrado", default: "Achei seu Instagram: @{handle}. Quer que eu conecte? Leio as legendas dos seus posts pra aprender seu tom e puxar mais do seu catálogo.", multiline: true },
+      { key: "instagram.searching", label: "Procurando @", default: "Deixa eu procurar o Instagram de vocês... 🔎" },
       { key: "instagram.scanning", label: "Varrendo o site", default: "Deixa eu dar uma olhada no site de vocês pra já adiantar algumas coisas... 🔎" },
       { key: "instagram.found_on_site", label: "Instagram achado no site", default: "Achei o Instagram de vocês no site: {handle} 📸 É esse mesmo?" },
       { key: "instagram.opt_sim", label: "Opção: conectar", default: "Conectar Instagram" },
@@ -1669,28 +1670,44 @@ export function OnboardingPreview({
       ),
     );
 
+  // Pré-filtro DETERMINÍSTICO por URL: descarta lixo óbvio (logo, banner, ícone,
+  // botão, sprite, capa de campanha) pelo nome do arquivo, ANTES de gastar a
+  // visão. É a rede de segurança quando a visão falha (timeout/erro): mesmo
+  // assim nunca cai pra um conjunto sujo.
+  const looksLikeJunkImage = (url: string): boolean =>
+    /(logo|logotipo|icon|favicon|sprite|banner|botao|button|selo|badge|capa|cover|campanha|promo|reserva|delivery|placeholder|pixel|1x1|blank|header|footer|bg[-_.]|background)/i.test(url);
+
   // Filtra as candidatas por VISÃO (mantém só fotos de produto/pratos, descarta
-  // logos/banners/anúncios). Fail-open: erro/timeout → devolve as originais.
+  // logos/banners/anúncios). Camadas: (1) pré-filtro por nome de arquivo;
+  // (2) corta o nº enviado à visão (custo/latência); (3) fail-safe: se a visão
+  // falhar (timeout/erro), devolve o conjunto PRÉ-FILTRADO — nunca o cru.
   const selectBrandPhotos = async (urls: string[]): Promise<string[]> => {
-    if (urls.length <= 3) return urls;
+    // pré-limpeza por URL; se sobrar pouco, mantém o original pra não esvaziar.
+    const preCleaned = urls.filter((u) => !looksLikeJunkImage(u));
+    const base = preCleaned.length >= 2 ? preCleaned : urls;
+    if (base.length <= 3) return base;
+    // manda no máximo 10 pra visão (controla latência/timeout); o resto fica de fora.
+    const forVision = base.slice(0, 10);
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 28000);
+    const timer = setTimeout(() => ctrl.abort(), 45000);
     try {
       const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ classifyImages: { urls } }),
+        body: JSON.stringify({ classifyImages: { urls: forVision } }),
         signal: ctrl.signal,
       });
       const j = await r.json();
       const keep = Array.isArray(j?.keep) ? j.keep : [];
       const picked = keep
         .map((n: unknown) => Number(n))
-        .filter((n: number) => Number.isInteger(n) && n >= 0 && n < urls.length)
-        .map((n: number) => urls[n]);
-      return picked.length ? picked : urls;
+        .filter((n: number) => Number.isInteger(n) && n >= 0 && n < forVision.length)
+        .map((n: number) => forVision[n]);
+      // visão respondeu → usa o que ela escolheu; vazio → cai pro pré-filtrado.
+      return picked.length ? picked : base.slice(0, 8);
     } catch {
-      return urls;
+      // visão indisponível → conjunto pré-filtrado por URL (sem logos/banners).
+      return base.slice(0, 8);
     } finally {
       clearTimeout(timer);
     }
@@ -1888,6 +1905,29 @@ export function OnboardingPreview({
     }
   };
 
+  // Mapeia a resposta do /api/instagram para IgData. Compartilhado entre a busca
+  // por @ conhecido e a descoberta por nome.
+  const mapIgResponse = (json: Record<string, unknown>): IgData | null => {
+    if (!json || json.error || !json.encontrado) return null;
+    return {
+      encontrado: true,
+      username: String(json.username || ""),
+      nome: String(json.nome || ""),
+      bio: String(json.bio || ""),
+      seguidores: Number(json.seguidores || 0),
+      seguindo: Number(json.seguindo || 0),
+      link: String(json.link || ""),
+      fotoPerfil: String(json.fotoPerfil || ""),
+      ehComercial: Boolean(json.ehComercial),
+      captions: Array.isArray(json.captions)
+        ? (json.captions as unknown[]).filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+        : [],
+      postImages: Array.isArray(json.postImages)
+        ? (json.postImages as unknown[]).filter((u): u is string => typeof u === "string" && u.trim().length > 0)
+        : [],
+    };
+  };
+
   const fetchInstagram = async (username: string): Promise<IgData | null> => {
     try {
       const r = await fetch(`${import.meta.env.BASE_URL}api/instagram`, {
@@ -1895,27 +1935,35 @@ export function OnboardingPreview({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
       });
-      const json = await r.json();
-      if (!r.ok || json.error || !json.encontrado) return null;
-      return {
-        encontrado: true,
-        username: String(json.username || ""),
-        nome: String(json.nome || ""),
-        bio: String(json.bio || ""),
-        seguidores: Number(json.seguidores || 0),
-        seguindo: Number(json.seguindo || 0),
-        link: String(json.link || ""),
-        fotoPerfil: String(json.fotoPerfil || ""),
-        ehComercial: Boolean(json.ehComercial),
-        captions: Array.isArray(json.captions)
-          ? json.captions.filter((c: unknown): c is string => typeof c === "string" && c.trim().length > 0)
-          : [],
-        postImages: Array.isArray(json.postImages)
-          ? json.postImages.filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0)
-          : [],
-      };
+      if (!r.ok) return null;
+      return mapIgResponse(await r.json());
     } catch {
       return null;
+    }
+  };
+
+  // Descobre o @ por BUSCA (nome + cidade) quando site/CNPJ não trouxeram um.
+  // O backend valida o perfil (seguidores + posts) antes de devolver — só vem
+  // um perfil REAL da marca, nunca um homônimo/parado. Timeout pra não travar.
+  const discoverInstagram = async (
+    business: string,
+    city: string,
+  ): Promise<IgData | null> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/instagram`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ business, city }),
+        signal: ctrl.signal,
+      });
+      if (!r.ok) return null;
+      return mapIgResponse(await r.json());
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
   };
 
@@ -2647,11 +2695,38 @@ export function OnboardingPreview({
               { label: tx("instagram.opt_nao"), value: "nao", next: "__advance__" },
             ]);
           } else {
-            await say(tx("instagram.l2"));
-            decide(forceIg, { conectar: "manual" }, [
-              { label: tx("instagram.opt_manual"), value: "manual", next: "instagram_edit" },
-              { label: tx("instagram.opt_nao"), value: "nao", next: "__advance__" },
-            ]);
+            // Sem @ do site/CNPJ: tenta DESCOBRIR por busca (nome + cidade). O
+            // backend valida o perfil (seguidores + posts) antes de devolver, então
+            // só vem um perfil REAL da marca — nunca homônimo/parado.
+            let discovered: IgData | null = null;
+            const dBiz = businessNameRef.current.trim();
+            if (dBiz) {
+              await say(tx("instagram.searching"));
+              discovered = await discoverInstagram(dBiz, cityRef.current.trim());
+              if (cancelled) return;
+            }
+            if (discovered && discovered.username) {
+              const dh = `@${discovered.username}`;
+              setIgHandle(dh); igHandleRef.current = dh;
+              const found = discovered;
+              await say(tx("instagram.l2_found", { handle: dh }));
+              decide(forceIg, null, [
+                {
+                  label: tx("instagram.opt_sim"),
+                  value: "conectar",
+                  next: "instagram_connecting",
+                  set: () => { igPromiseRef.current = Promise.resolve(found); },
+                },
+                { label: tx("instagram.opt_edit"), value: "edit", next: "instagram_edit" },
+                { label: tx("instagram.opt_nao"), value: "nao", next: "__advance__" },
+              ]);
+            } else {
+              await say(tx("instagram.l2"));
+              decide(forceIg, { conectar: "manual" }, [
+                { label: tx("instagram.opt_manual"), value: "manual", next: "instagram_edit" },
+                { label: tx("instagram.opt_nao"), value: "nao", next: "__advance__" },
+              ]);
+            }
           }
           break;
         }
