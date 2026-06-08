@@ -63,6 +63,9 @@ interface PlaceCandidate {
   delivery?: boolean; // Google Places: faz entrega (undefined = desconhecido)
   takeout?: boolean;  // Google Places: faz retirada
   fotos?: string[];   // fotos do Google Places (URLs públicas, sem chave)
+  rating?: number;    // nota média do Google
+  ratingCount?: number; // total de avaliações no Google
+  reviews?: { rating: number; texto: string }[]; // textos de avaliações reais
 }
 
 // Dados operacionais da loja no iFood (modo store_info do ator): taxa, mínimo,
@@ -1470,6 +1473,10 @@ export function OnboardingPreview({
   const [placeFotos, setPlaceFotos] = useState<string[]>([]); // fotos do Google Places da loja escolhida
   const [siteImages, setSiteImages] = useState<string[]>([]);  // fotos extraídas do site da marca
   const [brandPhotos, setBrandPhotos] = useState<string[]>([]); // fotos FILTRADAS por visão (só produto/pratos)
+  const [placeRating, setPlaceRating] = useState<number | null>(null); // nota Google da loja escolhida
+  const [placeRatingCount, setPlaceRatingCount] = useState<number | null>(null); // nº de avaliações Google
+  const placeReviewsRef = useRef<string[]>([]); // textos de avaliações (p/ resumo no review)
+  const [reviewHighlights, setReviewHighlights] = useState<string[]>([]); // "clientes elogiam" (resumo IA)
   const [ifoodStoreInfo, setIfoodStoreInfo] = useState<StoreInfo | null>(null); // taxa/mínimo/preparo/nota do iFood
   const ifoodStoreInfoRef = useRef<StoreInfo | null>(null); // leitura síncrona no motor do fluxo (fulfillment)
   const [placeResults, setPlaceResults] = useState<PlaceCandidate[]>([]);
@@ -1689,6 +1696,30 @@ export function OnboardingPreview({
       ),
     );
 
+  // Resume as avaliações reais (Google) em 3-5 destaques do que os clientes mais
+  // elogiam. Fail-open: erro/timeout → []. Nunca inventa (o backend usa só o texto).
+  const analyzeReviews = async (textos: string[], business: string): Promise<string[]> => {
+    if (!textos.length) return [];
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/normalize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews: { business, textos } }),
+        signal: ctrl.signal,
+      });
+      const j = await r.json();
+      return Array.isArray(j?.destaques)
+        ? j.destaques.filter((d: unknown): d is string => typeof d === "string" && d.trim().length > 0).slice(0, 5)
+        : [];
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   // Pré-filtro DETERMINÍSTICO por URL: descarta lixo óbvio (logo, banner, ícone,
   // botão, sprite, capa de campanha) pelo nome do arquivo, ANTES de gastar a
   // visão. É a rede de segurança quando a visão falha (timeout/erro): mesmo
@@ -1815,7 +1846,7 @@ export function OnboardingPreview({
       const json = await r.json();
       if (!r.ok || json.error || !Array.isArray(json.candidatos)) return [];
       return json.candidatos
-        .map((c: { nome?: string; endereco?: string; cidade?: string; categoria?: string; horario?: string; telefone?: string; site?: string; delivery?: boolean; takeout?: boolean; fotos?: unknown }, i: number) => ({
+        .map((c: { nome?: string; endereco?: string; cidade?: string; categoria?: string; horario?: string; telefone?: string; site?: string; delivery?: boolean; takeout?: boolean; fotos?: unknown; rating?: number; ratingCount?: number; reviews?: unknown }, i: number) => ({
           id: `u${i + 1}`,
           nome: String(c?.nome || business).trim() || business,
           endereco: String(c?.endereco || "").trim(),
@@ -1827,6 +1858,13 @@ export function OnboardingPreview({
           delivery: typeof c?.delivery === "boolean" ? c.delivery : undefined,
           takeout: typeof c?.takeout === "boolean" ? c.takeout : undefined,
           fotos: Array.isArray(c?.fotos) ? (c.fotos as unknown[]).filter((u): u is string => typeof u === "string") : [],
+          rating: typeof c?.rating === "number" ? c.rating : undefined,
+          ratingCount: typeof c?.ratingCount === "number" ? c.ratingCount : undefined,
+          reviews: Array.isArray(c?.reviews)
+            ? (c.reviews as { rating?: number; texto?: string }[])
+                .map((rv) => ({ rating: Number(rv?.rating || 0), texto: String(rv?.texto || "").trim() }))
+                .filter((rv) => rv.texto)
+            : [],
         }))
         .filter((c: PlaceCandidate) => c.endereco);
     } catch {
@@ -3042,6 +3080,13 @@ export function OnboardingPreview({
             if (cancelled) return;
             setBrandPhotos(kept);
           }
+          // Resume as avaliações reais do Google em "destaques" (o que os clientes
+          // elogiam) — prova social. Fail-open: sem reviews/erro → não mostra a linha.
+          if (placeReviewsRef.current.length) {
+            const destaques = await analyzeReviews(placeReviewsRef.current, businessNameRef.current.trim());
+            if (cancelled) return;
+            if (destaques.length) setReviewHighlights(destaques);
+          }
           await say(tx("review.msg", { negocio: businessNameRef.current.trim() || "seu negócio" }));
           await extra("review");
           await say(tx("review.ask"));
@@ -3115,6 +3160,9 @@ export function OnboardingPreview({
       // fotos do negócio (URLs originais) — já filtradas por visão quando
       // disponível; senão, as candidatas brutas. O backend pode cachear depois.
       fotos: (brandPhotos.length ? brandPhotos : assembleCandidatePhotos()).slice(0, 14),
+      // avaliação Google + destaques das avaliações (prova social / linguagem do cliente)
+      avaliacaoGoogle: placeRating ? { nota: placeRating, total: placeRatingCount ?? null } : null,
+      destaques: reviewHighlights,
       tom: tone,
       emoji,
       emojisSugeridos: emojiSet,
@@ -3131,7 +3179,7 @@ export function OnboardingPreview({
     } catch {
       /* ambiente sem localStorage — ignora */
     }
-  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, placeFotos, siteImages, brandPhotos, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, ifoodStoreInfo, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
+  }, [businessName, city, cnpjData, placeAddr, placeTelefone, placeHorario, placeFotos, siteImages, brandPhotos, placeRating, placeRatingCount, reviewHighlights, igData, site, setor, services, catalogItems, carroChefe, ifoodFound, ifoodStoreInfo, tone, emoji, emojiSet, bizTypeState, fulfillmentMode, fulfillment, payment, escalation, tasks]);
 
   /* handlers */
   const handleChoice = (opt: Choice) => {
@@ -3209,6 +3257,10 @@ export function OnboardingPreview({
     setPlaceHorario(c.horario);
     setPlaceTelefone(c.telefone);
     setPlaceFotos(Array.isArray(c.fotos) ? c.fotos.filter(Boolean) : []);
+    // avaliação do Google da unidade escolhida (prova social + base do resumo)
+    setPlaceRating(typeof c.rating === "number" && c.rating > 0 ? c.rating : null);
+    setPlaceRatingCount(typeof c.ratingCount === "number" && c.ratingCount > 0 ? c.ratingCount : null);
+    placeReviewsRef.current = Array.isArray(c.reviews) ? c.reviews.map((rv) => rv.texto).filter(Boolean) : [];
     // o site oficial vindo do Google tem prioridade sobre o deduzido no CNPJ
     // (confirm_contact só preenche o site se este ainda estiver vazio).
     if (c.site) { setSite(c.site); siteRef.current = c.site; }
@@ -3472,6 +3524,7 @@ export function OnboardingPreview({
     setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
     setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]); setBrandPhotos([]);
+    setPlaceRating(null); setPlaceRatingCount(null); placeReviewsRef.current = []; setReviewHighlights([]);
     setTextDraft(""); setToneDraft(""); setToneErr(""); setToneFileBusy(false);
     toneTextRef.current = ""; toneRunRef.current++; flowRunRef.current++;
     setCarroChefe(""); setTone(""); setEmoji(""); setEmojiSet([]); seenEmojisRef.current = [];
@@ -3524,6 +3577,7 @@ export function OnboardingPreview({
     setCnpjData(null); setIgData(null); igCaptionsRef.current = []; setCatalogItems([]);
     ifoodCatalogRef.current = null; setIfoodFound(null); ifoodFoundRef.current = null;
     setIfoodStoreInfo(null); ifoodStoreInfoRef.current = null; setPlaceFotos([]); setSiteImages([]); setBrandPhotos([]);
+    setPlaceRating(null); setPlaceRatingCount(null); placeReviewsRef.current = []; setReviewHighlights([]);
     researchPromiseRef.current = null;
     normalizePromiseRef.current = null;
     placePromiseRef.current = null;
@@ -3606,6 +3660,8 @@ export function OnboardingPreview({
         { label: "Site", value: site },
         { label: "Instagram", value: igData?.username ? `@${igData.username}` : (igHandle || "") },
         { label: "iFood", value: [ifoodFound?.nome || "", (ifoodStoreInfo?.rating ?? 0) > 0 ? `★ ${ifoodStoreInfo!.rating}${ifoodStoreInfo!.ratingCount ? ` (${ifoodStoreInfo!.ratingCount})` : ""}` : ""].filter(Boolean).join(" · ") },
+        { label: "Avaliação Google", value: placeRating ? `★ ${placeRating}${placeRatingCount ? ` (${placeRatingCount.toLocaleString("pt-BR")})` : ""}` : "" },
+        { label: "Clientes elogiam", value: reviewHighlights.join(" · ") },
         { label: "Catálogo", value: catalogItems.length ? `${catalogItems.length} itens` : (services.length ? `${services.length} serviços` : "") },
         { label: "Carro-chefe", value: carroChefe },
         { label: "Entrega", value: [fulfillmentMode, fulfillment].filter(Boolean).join(" — ") },

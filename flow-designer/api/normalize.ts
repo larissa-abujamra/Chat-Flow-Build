@@ -15,6 +15,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let business = "";
   let city = "";
   try {
+    // ── Modo "resumir avaliações" ─────────────────────────────────────────
+    // Recebe textos de avaliações REAIS de clientes (Google) e devolve 3-5
+    // destaques curtos do que os clientes mais elogiam + uma frase de resumo.
+    // É prova social / linguagem do cliente pro onboarding e pro marketing.
+    // Fail-open: sem chave/erro → {destaques:[],resumo:""}.
+    const reviewsReq = (body as Record<string, unknown>).reviews as
+      | { business?: string; textos?: unknown }
+      | undefined;
+    if (reviewsReq && typeof reviewsReq === "object") {
+      const textos = Array.isArray(reviewsReq.textos)
+        ? (reviewsReq.textos as unknown[])
+            .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+            .map((t) => t.slice(0, 600))
+            .slice(0, 8)
+        : [];
+      const rKey = process.env.OPENROUTER_API_KEY;
+      if (!rKey || textos.length === 0) { res.status(200).json({ destaques: [], resumo: "" }); return; }
+      try {
+        const rRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${rKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            reasoning: { enabled: false },
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Você lê avaliações REAIS de clientes de um negócio e resume o que eles mais elogiam. " +
+                  "Use SOMENTE o que está nas avaliações — nunca invente. Responda em pt-BR, SOMENTE JSON. " +
+                  "Formato: {\"destaques\":[\"3 a 5 pontos fortes curtos, 1-3 palavras cada, ex: 'atendimento atencioso','brigadeiro gourmet'\"],\"resumo\":\"uma frase curta do que os clientes amam\"}. " +
+                  "Foque em pontos POSITIVOS recorrentes (comida, atendimento, ambiente, entrega). Ignore reclamações isoladas.",
+              },
+              {
+                role: "user",
+                content:
+                  `Negócio: "${String(reviewsReq.business || "").slice(0, 120)}"\n\nAvaliações:\n` +
+                  textos.map((t, i) => `${i + 1}. ${t}`).join("\n"),
+              },
+            ],
+            max_tokens: 300,
+          }),
+        });
+        if (!rRes.ok) { res.status(200).json({ destaques: [], resumo: "" }); return; }
+        const rData: any = await rRes.json();
+        const parsed = extractJson(rData?.choices?.[0]?.message?.content || "");
+        const destaques = Array.isArray(parsed.destaques)
+          ? (parsed.destaques as unknown[])
+              .filter((d): d is string => typeof d === "string" && d.trim().length > 0)
+              .map((d) => d.trim().slice(0, 40))
+              .slice(0, 5)
+          : [];
+        res.status(200).json({ destaques, resumo: typeof parsed.resumo === "string" ? parsed.resumo.trim() : "" });
+        return;
+      } catch {
+        res.status(200).json({ destaques: [], resumo: "" }); return;
+      }
+    }
+
     // ── Modo "filtrar fotos" (visão) ──────────────────────────────────────
     // Recebe uma lista de URLs de imagem e usa um modelo de VISÃO pra manter só
     // as que mostram o PRODUTO/pratos/itens do negócio — descartando logos,

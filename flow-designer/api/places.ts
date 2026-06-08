@@ -66,6 +66,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             delivery: c.delivery,
             takeout: c.takeout,
             fotos: c.fotos || [],
+            rating: c.rating,
+            ratingCount: c.ratingCount,
+            reviews: c.reviews || [],
           }))
           .filter((c) => c.endereco);
         // cidade pedida primeiro, depois corta em 4.

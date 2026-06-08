@@ -185,6 +185,11 @@ export interface PlaceResult {
   // Nomes de recurso das fotos do Google Places (ex.: "places/X/photos/Y").
   // Resolvidos depois em URLs sem chave via resolveGooglePhotos.
   fotos?: string[];
+  // Avaliação do Google: nota média, total de avaliações e textos de reviews
+  // recentes (voz REAL do cliente) — prova social + destaques pro onboarding.
+  rating?: number;
+  ratingCount?: number;
+  reviews?: { rating: number; texto: string }[];
 }
 
 // Resolve nomes de foto do Places em URLs públicas SEM expor a API key: o
@@ -355,6 +360,9 @@ export async function fetchGooglePlaces(
           "places.delivery",
           "places.takeout",
           "places.photos",
+          "places.rating",
+          "places.userRatingCount",
+          "places.reviews",
         ].join(","),
       },
       body: JSON.stringify({
@@ -398,6 +406,17 @@ export async function fetchGooglePlaces(
                 .slice(0, 3)
                 .map((ph) => String(ph?.name || ""))
                 .filter(Boolean)
+            : [],
+          rating: typeof pl.rating === "number" ? pl.rating : undefined,
+          ratingCount: typeof pl.userRatingCount === "number" ? pl.userRatingCount : undefined,
+          reviews: Array.isArray(pl.reviews)
+            ? (pl.reviews as Record<string, any>[])
+                .map((rv) => ({
+                  rating: typeof rv?.rating === "number" ? rv.rating : 0,
+                  texto: s(rv?.text?.text || rv?.originalText?.text || ""),
+                }))
+                .filter((rv) => rv.texto)
+                .slice(0, 5)
             : [],
         } as PlaceResult,
       };
