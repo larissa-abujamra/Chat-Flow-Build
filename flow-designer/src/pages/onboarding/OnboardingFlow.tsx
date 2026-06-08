@@ -3105,8 +3105,9 @@ export function OnboardingPreview({
             pedidoMinimo: ifoodStoreInfo?.minimumOrder ?? null,
             tempoPreparo: ifoodStoreInfo?.prepTime ?? null,
             tempoEntrega: ifoodStoreInfo?.deliveryTime ?? null,
-            nota: ifoodStoreInfo?.rating ?? null,
-            avaliacoes: ifoodStoreInfo?.ratingCount ?? null,
+            // nota 0 = sem avaliações ainda → guardamos null (não "0 estrelas").
+            nota: (ifoodStoreInfo?.rating ?? 0) > 0 ? ifoodStoreInfo!.rating : null,
+            avaliacoes: (ifoodStoreInfo?.rating ?? 0) > 0 ? (ifoodStoreInfo?.ratingCount ?? null) : null,
             faixaPreco: ifoodStoreInfo?.priceRange || "",
             logo: ifoodStoreInfo?.logo || "",
           }
@@ -3604,7 +3605,7 @@ export function OnboardingPreview({
         { label: "Horário", value: placeHorario || cnpjData?.horario || "" },
         { label: "Site", value: site },
         { label: "Instagram", value: igData?.username ? `@${igData.username}` : (igHandle || "") },
-        { label: "iFood", value: [ifoodFound?.nome || "", ifoodStoreInfo?.rating != null ? `★ ${ifoodStoreInfo.rating}${ifoodStoreInfo.ratingCount ? ` (${ifoodStoreInfo.ratingCount})` : ""}` : ""].filter(Boolean).join(" · ") },
+        { label: "iFood", value: [ifoodFound?.nome || "", (ifoodStoreInfo?.rating ?? 0) > 0 ? `★ ${ifoodStoreInfo!.rating}${ifoodStoreInfo!.ratingCount ? ` (${ifoodStoreInfo!.ratingCount})` : ""}` : ""].filter(Boolean).join(" · ") },
         { label: "Catálogo", value: catalogItems.length ? `${catalogItems.length} itens` : (services.length ? `${services.length} serviços` : "") },
         { label: "Carro-chefe", value: carroChefe },
         { label: "Entrega", value: [fulfillmentMode, fulfillment].filter(Boolean).join(" — ") },
