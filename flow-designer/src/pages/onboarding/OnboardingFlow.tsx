@@ -2439,8 +2439,33 @@ export function OnboardingPreview({
             ?? fetchPlaces(businessNameRef.current.trim(), cityRef.current.trim()));
           if (cancelled) return;
           markExtraDone(placeBlock);
-          setPlaceResults(found);
-          if (found.length === 0) {
+          let candidates = found;
+          // FALLBACK DETERMINÍSTICO: o Google Places não indexa todo negócio
+          // pequeno (ex.: delivery sem ficha no Maps), e a busca web de reserva
+          // varia entre execuções (0/1/2 resultados). Quando não veio nada, usamos
+          // o endereço REAL do CNPJ (Receita) — que já está sendo buscado em
+          // paralelo — como candidato único e estável. Nunca inventa: só usa o
+          // cadastro oficial.
+          if (candidates.length === 0 && cnpjPromiseRef.current) {
+            const c = await cnpjPromiseRef.current;
+            if (cancelled) return;
+            const ende = cleanField(c?.endereco || "");
+            if (c?.encontrado && ende) {
+              candidates = [{
+                id: "cnpj",
+                nome: cleanField(c.nomeFantasia || "") || cleanField(c.razaoSocial || "") || businessNameRef.current.trim(),
+                endereco: ende,
+                cidade: cleanField(c.cidade || "") || cityRef.current.trim(),
+                categoria: cleanField(c.atividade || ""),
+                horario: cleanField(c.horario || ""),
+                telefone: cleanField(c.telefone || ""),
+                site: cleanField(c.site || ""),
+              }];
+            }
+          }
+          setPlaceResults(candidates);
+          const found2 = candidates;
+          if (found2.length === 0) {
             await say(tx("place_pick.notfound"));
             await wait(450);
             if (!cancelled) advanceFrom("place_pick");
@@ -2450,7 +2475,7 @@ export function OnboardingPreview({
           // "responde sozinho" — auto-selecionar parecia uma resposta que o usuário
           // não deu). Com mais de uma unidade, avisa que há várias.
           await say(tx("place_pick.found"));
-          if (found.length > 1) await say(tx("place_pick.multi"));
+          if (found2.length > 1) await say(tx("place_pick.multi"));
           if (!cancelled) setPending({ kind: "placePick" });
           break;
         }
