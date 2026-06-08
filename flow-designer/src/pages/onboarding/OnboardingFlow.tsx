@@ -439,6 +439,7 @@ const FLOW_NODES: FlowNodeDef[] = [
     kind: "Mensagem",
     fields: [
       { key: "instagram_connecting.done", label: "Confirmação", default: "Pronto, conectei! 🎉" },
+      { key: "instagram_connecting.unsure", label: "Não confirmado", default: "Não consegui confirmar bem esse Instagram agora — melhor você conectar o perfil certo depois no painel. Seguimos! 🙂", multiline: true },
     ],
   },
   {
@@ -2612,11 +2613,15 @@ export function OnboardingPreview({
             if (cancelled) return;
             siteScrapeRef.current = sc;
             if (sc?.imagens?.length) setSiteImages(sc.imagens);
-            // @ achado no próprio site → conecta sem perguntar, mesmo que já
-            // tivéssemos um @ vindo do CNPJ (o site corrobora a descoberta).
-            if (sc?.instagram) {
-              if (!cleanField(igHandleRef.current)) {
-                setIgHandle(sc.instagram); igHandleRef.current = sc.instagram;
+            // O @ achado no PRÓPRIO site (link real no HTML, extraído de forma
+            // determinística) é a fonte MAIS CONFIÁVEL. Ele SOBRESCREVE um @ que
+            // tenha vindo da descoberta por CNPJ/busca — esta às vezes resolve um
+            // perfil errado/parado (ex.: @restaurantemadero, 14 seguidores, em vez
+            // de @maderobrasil). Assim o handle fica estável entre execuções.
+            const scIg = cleanField(sc?.instagram || "");
+            if (scIg) {
+              if (scIg !== cleanField(igHandleRef.current)) {
+                setIgHandle(scIg); igHandleRef.current = scIg;
               }
               igFromSiteRef.current = true;
             }
@@ -2666,6 +2671,23 @@ export function OnboardingPreview({
           markExtraDone(connBlock);
           await wait(ig ? 800 : 1600);
           if (cancelled) return;
+          // Validação: se o @ veio de PALPITE (CNPJ/busca, não do site) e o perfil
+          // parece errado/parado — quase sem seguidores, sem posts e sem legendas —
+          // NÃO apresentamos como o Instagram da marca (evita "conectar" o perfil
+          // errado, ex.: @restaurantemadero com 14 seguidores). Seguimos sem.
+          const bogusGuess =
+            !!ig && ig.encontrado && !igFromSiteRef.current &&
+            (ig.seguidores || 0) < 50 &&
+            (ig.captions?.length || 0) === 0 &&
+            (ig.postImages?.length || 0) === 0;
+          if (bogusGuess) {
+            setIgData(null); igCaptionsRef.current = [];
+            setIgHandle(""); igHandleRef.current = "";
+            await say(tx("instagram_connecting.unsure"));
+            await wait(450);
+            if (!cancelled) advanceFrom("instagram");
+            break;
+          }
           if (ig && ig.encontrado) {
             const segs = ig.seguidores
               ? ` (${ig.seguidores.toLocaleString("pt-BR")} seguidores)`
