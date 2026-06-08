@@ -95,6 +95,25 @@ function inferFulfillmentMode(c?: { delivery?: boolean; takeout?: boolean } | nu
   return "";
 }
 
+// Quantos tokens significativos do nome do negócio aparecem no @ do Instagram.
+// Usado pra detectar handles claramente alheios à marca (ex.: um link de rodapé
+// pro Instagram do CONTADOR — "@macro_contabileconsultoria" pra "Café Girondino"),
+// que o scraping do site às vezes captura. 0 = nenhuma relação com o nome.
+const IG_NAME_STOPWORDS = new Set([
+  "de", "da", "do", "das", "dos", "e", "restaurante", "lanchonete", "bar",
+  "cafe", "loja", "delivery", "comida", "the", "sao", "paulo",
+]);
+function igNameOverlap(handle: string, business: string): number {
+  const tok = (s: string) =>
+    String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, " ").split(" ").filter((t) => t.length >= 2);
+  const bizTokens = tok(business).filter((t) => !IG_NAME_STOPWORDS.has(t));
+  if (!bizTokens.length) return 1; // sem tokens úteis no nome → não julga
+  const h = handle.toLowerCase().replace(/^@/, "");
+  const hTokens = new Set(tok(h));
+  return bizTokens.filter((t) => hTokens.has(t) || h.includes(t) || t.includes(h)).length;
+}
+
 // Roteia uma imagem pelo nosso proxy quando o CDN dela bloqueia hotlink no
 // navegador (Instagram/Facebook, iFood). Assim as fotos da MARCA (do Instagram
 // e do iFood) aparecem de fato. Sites e Google Places carregam direto.
@@ -2699,7 +2718,25 @@ export function OnboardingPreview({
               igFromSiteRef.current = true;
             }
           }
-          const igh = cleanField(igHandleRef.current || "");
+          let igh = cleanField(igHandleRef.current || "");
+          // VALIDAÇÃO do @ do site: o scraping pega o 1º link instagram.com do HTML,
+          // que às vezes é de TERCEIRO no rodapé (contador/agência), sem relação com
+          // a marca. Se o @ veio do site e NÃO tem nenhum token do nome do negócio,
+          // tentamos descobrir por busca um @ que combine com o nome; se achar, troca.
+          // Só dispara nesse caso suspeito (overlap 0) — não toca handles que casam.
+          if (igh && igFromSiteRef.current) {
+            const dBiz = businessNameRef.current.trim();
+            if (dBiz && igNameOverlap(igh, dBiz) === 0) {
+              const better = await discoverInstagram(dBiz, cityRef.current.trim());
+              if (cancelled) return;
+              if (better && better.username && igNameOverlap(better.username, dBiz) > 0) {
+                igh = `@${better.username}`;
+                setIgHandle(igh); igHandleRef.current = igh;
+                igFromSiteRef.current = false; // agora veio da busca validada por nome
+                igPromiseRef.current = Promise.resolve(better);
+              }
+            }
+          }
           await say(carroChefe ? tx("instagram.l1", { carro_chefe: carroChefe }) : tx("instagram.l1_alt"));
           if (igh) {
             // Sempre confirma com o usuário antes de conectar — mesmo quando
